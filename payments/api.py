@@ -3,12 +3,12 @@ import frappe
 from frappe import _
 from frappe.integrations.utils import create_request_log
 
-def stripe_cancel_subscription(subscription_doc):
+def stripe_cancel_subscription(subscription_doc, method=None):
     """
     Cancel an active Stripe subscription from ERPNext Subscription Doc
     """
     # Get Stripe Settings
-    frappe.log_error(f"before Status check", "Stripe Debug")
+    frappe.log_error(f"before Status check{method}", "Stripe Debug")
     if subscription_doc.status == "Cancelled":
         frappe.log_error(f"Status check done", "Stripe Debug")
         stripe_settings = frappe.get_doc("Stripe Settings", "Stripe")
