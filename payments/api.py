@@ -3,13 +3,14 @@ import frappe
 from frappe import _
 from frappe.integrations.utils import create_request_log
 
-def stripe_cancel_subscription(subscription_doc, method=None):
+def stripe_cancel_subscription(subscription_id):
     """
     Cancel an active Stripe subscription from ERPNext Subscription Doc
     """
     # Get Stripe Settings
-    frappe.log_error(f"before Status check{method}", "Stripe Debug")
-    if subscription_doc.status == "Cancelled":
+    frappe.log_error(f"before Status check", "Stripe Debug")
+    if subscription_id:
+        subscription_doc = frappe.get_doc("Subscription", subscription_id)
         frappe.log_error(f"Status check done", "Stripe Debug")
         stripe_settings = frappe.get_doc("Stripe Settings", "Stripe")
         stripe.api_key = stripe_settings.get_password(fieldname="secret_key", raise_exception=False)
@@ -36,11 +37,13 @@ def stripe_cancel_subscription(subscription_doc, method=None):
 
             # Update Integration Log
             stripe_settings.integration_request.db_set("status", "Completed", update_modified=False)
-            subscription_doc.db_set("status", "Cancelled")
-            frappe.msgprint(_("Stripe subscription cancelled successfully"))
+            subscription_doc.db_set("cancelation_date", subscription_doc.current_invoice_start)
+            frappe.response.message = {
+                "success": True,
+                "message": "Auto Pay cancelled successfully"
+            }
+            return frappe.response.message
 
         except Exception as e:
             stripe_settings.integration_request.db_set("status", "Failed", update_modified=False)
             frappe.log_error(f"Unable to cancel Stripe subscription: {str(e)}", _("Stripe Subscription Cancel"))
-
-        return True
