@@ -3,6 +3,7 @@ import frappe
 from frappe import _
 from frappe.integrations.utils import create_request_log
 
+@frappe.whitelist(allow_guest=True)
 def stripe_cancel_subscription(subscription_id):
     """
     Cancel an active Stripe subscription from ERPNext Subscription Doc
