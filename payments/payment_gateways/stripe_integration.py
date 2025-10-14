@@ -3,6 +3,8 @@
 
 import stripe
 import frappe
+from datetime import datetime, timedelta
+import pytz
 from frappe import _
 from frappe.integrations.utils import create_request_log
 
@@ -67,8 +69,14 @@ def create_subscription_on_stripe(stripe_settings):
 				description=payer_name,
 				email=payer_email,
 			)
-
-		subscription = stripe.Subscription.create(customer=customer, items=items)
+		tz = pytz.timezone("America/Los_Angeles")
+		now = datetime.now(tz)
+		next_anchor = datetime(now.year, now.month, now.day, 0, 5, 0, tzinfo=tz)
+		if next_anchor <= now:
+			# If 12:05 AM already passed today → set tomorrow
+			next_anchor += timedelta(days=1)
+		billing_cycle_anchor = int(next_anchor.timestamp())
+		subscription = stripe.Subscription.create(customer=customer, items=items, billing_cycle_anchor=billing_cycle_anchor)
 
 		if subscription.status == "active":
 			stripe_settings.integration_request.db_set("status", "Completed", update_modified=False)
