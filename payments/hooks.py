@@ -108,12 +108,12 @@ override_doctype_class = {"Web Form": "payments.overrides.payment_webform.Paymen
 # 	}
 # }
 
-doc_events = {
-    "Subscription": {
-        "after_save": "payments.api.stripe_cancel_subscription",
-        "on_update": "payments.api.stripe_cancel_subscription",
-    }
-}
+# doc_events = {
+#     "Subscription": {
+#         "after_save": "payments.api.stripe_cancel_subscription",
+#         "on_update": "payments.api.stripe_cancel_subscription",
+#     }
+# }
 
 # Scheduled Tasks
 # ---------------
