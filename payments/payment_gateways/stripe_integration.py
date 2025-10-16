@@ -84,7 +84,6 @@ def create_subscription_on_stripe(stripe_settings):
 			items=items,
 			backdate_start_date=backdate_start_date,
 			billing_cycle_anchor=billing_cycle_anchor,
-			proration_behavior='none',
 			expand=["latest_invoice.payment_intent"]
 		)
 
