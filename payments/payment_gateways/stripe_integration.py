@@ -71,12 +71,28 @@ def create_subscription_on_stripe(stripe_settings):
 			)
 		tz = pytz.timezone("America/Los_Angeles")
 		now = datetime.now(tz)
+
+        # Step 1: Create the subscription and charge immediately
+		subscription = stripe.Subscription.create(
+            customer=customer,
+            items=items,
+            proration_behavior='none',
+            payment_behavior='default_incomplete',
+            expand=["latest_invoice.payment_intent"]
+        )
+
+        # Calculate next day at 00:05 AM for billing anchor
 		next_anchor = datetime(now.year, now.month, now.day, 0, 5, 0, tzinfo=tz)
 		if next_anchor <= now:
-			# If 12:05 AM already passed today → set tomorrow
 			next_anchor += timedelta(days=1)
 		billing_cycle_anchor = int(next_anchor.timestamp())
-		subscription = stripe.Subscription.create(customer=customer, items=items, billing_cycle_anchor=billing_cycle_anchor,proration_behavior='none',expand=["latest_invoice.payment_intent"])
+
+        # Step 2: Update subscription to set billing cycle anchor
+		subscription = stripe.Subscription.modify(
+            subscription.id,
+            billing_cycle_anchor=billing_cycle_anchor,
+            proration_behavior='none'
+        )
 
 		if subscription.status == "active":
 			stripe_settings.integration_request.db_set("status", "Completed", update_modified=False)
