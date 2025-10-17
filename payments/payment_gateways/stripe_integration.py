@@ -71,19 +71,16 @@ def create_subscription_on_stripe(stripe_settings):
 			)
 		tz = pytz.timezone("America/Los_Angeles")
 		now = datetime.now(tz)
-		backdate_start_date = int(datetime(now.year, now.month, now.day, 0, 5, 0, tzinfo=tz).timestamp())
-		# Calculate next day at 00:05 AM for billing anchor
-		next_anchor = datetime(now.year, now.month, now.day, 0, 5, 0, tzinfo=tz)
+		backdate_start_date = int(datetime(now.year, now.month, now.day, 0, 0, 0, tzinfo=tz).timestamp())
+		next_anchor = datetime(now.year, now.month, now.day, 0, 0, 0, tzinfo=tz)
 		if next_anchor <= now:
 			next_anchor += timedelta(days=1)
 		billing_cycle_anchor = int(next_anchor.timestamp())
 
-        # Step 1: Create the subscription and charge immediately
 		subscription = stripe.Subscription.create(
 			customer=customer,
 			items=items,
 			backdate_start_date=backdate_start_date,
-			billing_cycle_anchor=billing_cycle_anchor,
 			expand=["latest_invoice.payment_intent"]
 		)
 
