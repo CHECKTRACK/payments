@@ -71,8 +71,8 @@ def create_subscription_on_stripe(stripe_settings):
 			)
 		tz = pytz.timezone("America/Los_Angeles")
 		now = datetime.now(tz)
-		backdate_start_date = tz.localize(datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0))
-		# backdate_start_date = int(datetime(now.year, now.month, now.day, 0, 0, 0, tzinfo=tz).timestamp())
+		# backdate_start_date = tz.localize(datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0))
+		backdate_start_date = int(datetime(now.year, now.month, now.day, 0, 0, 0, tzinfo=tz).timestamp())
 		next_anchor = datetime(now.year, now.month, now.day, 0, 0, 0, tzinfo=tz)
 		if next_anchor <= now:
 			next_anchor += timedelta(days=1)
@@ -82,7 +82,7 @@ def create_subscription_on_stripe(stripe_settings):
 			customer=customer,
 			items=items,
 			proration_behavior="none",
-			backdate_start_date=int(backdate_start_date.astimezone(pytz.UTC).timestamp()),
+			backdate_start_date=backdate_start_date,
 
 			expand=["latest_invoice.payment_intent"]
 		)
