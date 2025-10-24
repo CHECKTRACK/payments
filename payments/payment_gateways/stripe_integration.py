@@ -81,10 +81,6 @@ def create_subscription_on_stripe(stripe_settings):
 		subscription = stripe.Subscription.create(
 			customer=customer,
 			items=items,
-			proration_behavior="none",
-			backdate_start_date=backdate_start_date,
-
-			expand=["latest_invoice.payment_intent"]
 		)
 
 		if subscription.status == "active":
