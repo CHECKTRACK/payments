@@ -81,6 +81,7 @@ def create_subscription_on_stripe(stripe_settings):
 		subscription = stripe.Subscription.create(
 			customer=customer,
 			items=items,
+			billing_mode="flexible"
 		)
 
 		if subscription.status == "active":
