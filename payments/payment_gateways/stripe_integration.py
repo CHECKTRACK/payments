@@ -31,26 +31,10 @@ def create_stripe_subscription(gateway_controller, data):
 				fields=["plan", "qty"]
 			)
 
-			sales_invoice = frappe.get_doc(payment_request_doc.reference_doctype, payment_request_doc.reference_name)
-			registration_fee_item = None
-			item_price_id = None
-			# Step 2: Loop through its items to find "Registration Fee"
-			for item in sales_invoice.items:
-				if item.item_name == "Registration Fee" or item.item_code == "Registration Fee":
-					registration_fee_item = item
-					break
-			
-			if registration_fee_item:
-				item_price_id = frappe.db.get_value(
-					"Item Price",
-					{"item_code": registration_fee_item.item_code, "price_list": "Standard Selling"},
-					"reference"
-				)
-
 		else:
 			stripe_settings.payment_plans = []
 
-		return create_subscription_on_stripe(stripe_settings,item_price_id)
+		return create_subscription_on_stripe(stripe_settings)
 
 	except Exception:
 		stripe_settings.log_error("Unable to create Stripe subscription")
@@ -66,14 +50,16 @@ def create_stripe_subscription(gateway_controller, data):
 		}
 
 
-def create_subscription_on_stripe(stripe_settings,item_price_id):
+def create_subscription_on_stripe(stripe_settings):
 	items = []
+	item_one_time = []
 	for payment_plan in stripe_settings.payment_plans:
 		plan = frappe.db.get_value("Subscription Plan", payment_plan.plan, "product_price_id")
-		items.append({"price": plan, "quantity": payment_plan.qty})
-
-	if item_price_id:
-		items.append({"price": item_price_id, "quantity": 1})
+		price_obj = stripe.Price.retrieve(plan)
+		if price_obj["type"] == "recurring":
+			items.append({"price": plan, "quantity": payment_plan.qty})
+		elif price_obj["type"] == "one_time":
+			item_one_time.append({"price": plan, "quantity": payment_plan.qty})
 
 	try:
 		payer_email = stripe_settings.data.payer_email
@@ -90,18 +76,11 @@ def create_subscription_on_stripe(stripe_settings,item_price_id):
 				description=payer_name,
 				email=payer_email,
 			)
-		tz = pytz.timezone("America/Los_Angeles")
-		now = datetime.now(tz)
-		# backdate_start_date = tz.localize(datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0))
-		backdate_start_date = int(datetime(now.year, now.month, now.day, 0, 0, 0, tzinfo=tz).timestamp())
-		next_anchor = datetime(now.year, now.month, now.day, 0, 0, 0, tzinfo=tz)
-		if next_anchor <= now:
-			next_anchor += timedelta(days=1)
-		billing_cycle_anchor = int(next_anchor.timestamp())
 
 		subscription = stripe.Subscription.create(
 			customer=customer,
 			items=items,
+			add_invoice_items=item_one_time,
 			billing_mode={"type" : "flexible"},
 			off_session=True,
 			payment_behavior="error_if_incomplete",
