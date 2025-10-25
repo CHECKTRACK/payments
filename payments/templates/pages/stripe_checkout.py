@@ -54,7 +54,7 @@ def get_context(context):
 				{"parent": context.reference_docname},
 				"plan"
 			)
-			context["amount"] = f"{context['amount']} / {_(recurrence or 'subscription')}"
+			context["amount"] = f"Pay {context['amount']}"
 
 	else:
 		frappe.log_error(
