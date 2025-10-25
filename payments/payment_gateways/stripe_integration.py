@@ -30,10 +30,27 @@ def create_stripe_subscription(gateway_controller, data):
 				filters={"parent": payment_request_doc.name},
 				fields=["plan", "qty"]
 			)
+
+			sales_invoice = frappe.get_doc(payment_request_doc.reference_doctype, payment_request_doc.reference_name)
+			registration_fee_item = None
+			item_price_id = None
+			# Step 2: Loop through its items to find "Registration Fee"
+			for item in sales_invoice.items:
+				if item.item_name == "Registration Fee" or item.item_code == "Registration Fee":
+					registration_fee_item = item
+					break
+			
+			if registration_fee_item:
+				item_price_id = frappe.db.get_value(
+					"Item Price",
+					{"item_code": registration_fee_item.item_code, "price_list": "Standard Selling"},
+					"reference"
+				)
+
 		else:
 			stripe_settings.payment_plans = []
 
-		return create_subscription_on_stripe(stripe_settings)
+		return create_subscription_on_stripe(stripe_settings,item_price_id)
 
 	except Exception:
 		stripe_settings.log_error("Unable to create Stripe subscription")
@@ -49,11 +66,14 @@ def create_stripe_subscription(gateway_controller, data):
 		}
 
 
-def create_subscription_on_stripe(stripe_settings):
+def create_subscription_on_stripe(stripe_settings,item_price_id):
 	items = []
 	for payment_plan in stripe_settings.payment_plans:
 		plan = frappe.db.get_value("Subscription Plan", payment_plan.plan, "product_price_id")
 		items.append({"price": plan, "quantity": payment_plan.qty})
+
+	if item_price_id:
+		items.append({"price": item_price_id, "quantity": 1})
 
 	try:
 		payer_email = stripe_settings.data.payer_email
