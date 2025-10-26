@@ -4,7 +4,6 @@ from frappe import _
 from frappe.integrations.utils import create_request_log
 from datetime import datetime, timedelta
 from frappe.utils import getdate, nowdate, add_months
-from frappe.modules import frappe_permissions
 from frappe.utils import get_first_day, get_last_day
 
 @frappe.whitelist(allow_guest=True)
