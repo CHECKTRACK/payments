@@ -58,12 +58,21 @@ def stripe_cancel_subscription(subscription_id):
                         # total_amount += plan_total
 
                         # Add item to pending Stripe invoice
+                        price_obj = stripe.Price.retrieve(price_id)
+                        amount_per_month = price_obj["unit_amount"]  # amount in cents
+
                         stripe.InvoiceItem.create(
                             customer=customer_id,
-                            price=price_id,
-                            quantity=plan.qty * remaining_months,
+                            amount=int(amount_per_month * plan.qty * remaining_months),
+                            currency=price_obj["currency"],
                             description=f"Early cancellation charge for {remaining_months} remaining month(s)"
                         )
+                        # stripe.InvoiceItem.create(
+                        #     customer=customer_id,
+                        #     price=price_id,
+                        #     quantity=plan.qty * remaining_months,
+                        #     description=f"Early cancellation charge for {remaining_months} remaining month(s)"
+                        # )
 
                     # Create & charge the one-time invoice on Stripe
                     invoice = stripe.Invoice.create(
