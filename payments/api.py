@@ -88,6 +88,7 @@ def stripe_cancel_subscription(subscription_id):
 
             else:
                 # Cancel the subscription in Stripe
+                frappe.log_error("Cancel the subscription in Stripe", "Stripe Early Cancellation")
                 # stripe.Subscription.modify(stripe_subscription_id, cancel_at_period_end=True)
 
                 # Update Integration Log
