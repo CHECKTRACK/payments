@@ -77,7 +77,8 @@ def stripe_cancel_subscription(subscription_id):
                     # Create & charge the one-time invoice on Stripe
                     invoice = stripe.Invoice.create(
                         customer=customer_id,
-                        auto_advance=True  # finalize & charge automatically
+                        auto_advance=True, # finalize & charge automatically
+                        pending_invoice_items_behavior="include"
                     )
 
                     frappe.log_error(f"Created Stripe invoice {invoice.id} for {remaining_months} months", "Stripe Early Cancellation")
