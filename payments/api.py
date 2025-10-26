@@ -4,6 +4,8 @@ from frappe import _
 from frappe.integrations.utils import create_request_log
 from datetime import datetime, timedelta
 from frappe.utils import getdate, nowdate, add_months
+from frappe.modules import frappe_permissions
+from frappe.utils import get_first_day, get_last_day
 
 @frappe.whitelist(allow_guest=True)
 def stripe_cancel_subscription(subscription_id):
@@ -76,8 +78,8 @@ def stripe_cancel_subscription(subscription_id):
 
                     frappe.log_error(f"Created Stripe invoice {invoice.id} for {remaining_months} months", "Stripe Early Cancellation")
 
-                    for month_index in range(remaining_months):
-                        invoice = create_subscription_invoice(subscription_doc.name)
+                    # for month_index in range(remaining_months):
+                    #     invoice = create_subscription_invoice(subscription_doc.name)
 
                     # frappe.log_error(f"Created and Paid Sales Invoice {si.name}", "Stripe Early Cancellation")
 
@@ -126,6 +128,24 @@ def create_subscription_invoice(subscription_name, posting_date=None):
         posting_date = posting_date or subscription.current_invoice_start
     else:
         posting_date = subscription.current_invoice_end
+
+    # Ensure Fiscal Year exists for posting_date
+    posting_year = getdate(posting_date).year
+    company = subscription.company or frappe.db.get_single_value("Global Defaults", "default_company")
+    fy_exists = frappe.db.exists("Fiscal Year", {"year": str(posting_year), "company": company})
+    if not fy_exists:
+        # Create Fiscal Year for the year of posting_date
+
+        fiscal_year_doc = frappe.get_doc({
+            "doctype": "Fiscal Year",
+            "year": str(posting_year),
+            "company": company,
+            "year_start_date": get_first_day(posting_year),
+            "year_end_date": get_last_day(posting_year),
+            "fiscal_year_based_on": "Calendar Year"
+        })
+        fiscal_year_doc.insert(ignore_permissions=True)
+        frappe.db.commit()
 
     # Create invoice doc
     invoice = frappe.get_doc({
