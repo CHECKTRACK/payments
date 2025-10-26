@@ -42,7 +42,7 @@ def stripe_cancel_subscription(subscription_id):
             # If current date < cancel_at_date, we must charge remaining months
             today = getdate(nowdate())
             if today < cancel_at_date:
-                remaining_months = (cancel_at_date.year - today.year) * 12 + (cancel_at_date.month - today.month)
+                remaining_months = (cancel_at_date.year - today.year) * 12 + (cancel_at_date.month - start_date.month)
 
                 if remaining_months > 0:
                     # Get Stripe Customer from ERPNext subscription
@@ -77,7 +77,8 @@ def stripe_cancel_subscription(subscription_id):
                     # Create & charge the one-time invoice on Stripe
                     invoice = stripe.Invoice.create(
                         customer=customer_id,
-                        auto_advance=True  # finalize & charge automatically
+                        auto_advance=True, # finalize & charge automatically
+                        pending_invoice_items_behavior="include"
                     )
 
                     frappe.log_error(f"Created Stripe invoice {invoice.id} for {remaining_months} months", "Stripe Early Cancellation")
@@ -150,7 +151,7 @@ def create_subscription_invoice(subscription_name, posting_date=None):
     # Add items from plans
     for plan in subscription.plans:
         plan_doc = frappe.get_doc("Subscription Plan", plan.plan)
-        rate = plan_doc.rate * plan.qty
+        rate = plan_doc.cost * plan.qty
         item = {
             "item_code": plan_doc.item,
             "qty": plan.qty,
