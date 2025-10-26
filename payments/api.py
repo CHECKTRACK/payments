@@ -52,7 +52,7 @@ def stripe_cancel_subscription(subscription_id):
 
                     invoice = stripe.Invoice.create(
                         customer=customer_id,
-                        auto_advance=False  # keep draft for adding items
+                        auto_advance=True  # keep draft for adding items
                     )
 
                     # Step 2: Create InvoiceItem(s) and attach to this invoice
