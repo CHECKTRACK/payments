@@ -76,8 +76,8 @@ def stripe_cancel_subscription(subscription_id):
 
                     frappe.log_error(f"Created Stripe invoice {invoice.id} for {remaining_months} months", "Stripe Early Cancellation")
 
-                    for month_index in range(remaining_months):
-                        invoice = create_subscription_invoice(subscription_doc.name)
+                    # for month_index in range(remaining_months):
+                    #     invoice = create_subscription_invoice(subscription_doc.name)
 
                     # frappe.log_error(f"Created and Paid Sales Invoice {si.name}", "Stripe Early Cancellation")
 
