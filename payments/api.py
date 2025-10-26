@@ -44,7 +44,7 @@ def stripe_cancel_subscription(subscription_id):
             # If current date < cancel_at_date, we must charge remaining months
             today = getdate(nowdate())
             if today < cancel_at_date:
-                remaining_months = (cancel_at_date.year - today.year) * 12 + (cancel_at_date.month - current_invoice_start_date.month)
+                remaining_months = (cancel_at_date.year - current_invoice_start_date.year) * 12 + (cancel_at_date.month - current_invoice_start_date.month)
 
                 if remaining_months > 0:
                     # Get Stripe Customer from ERPNext subscription
