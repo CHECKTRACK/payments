@@ -150,7 +150,7 @@ def create_subscription_invoice(subscription_name, posting_date=None):
     # Add items from plans
     for plan in subscription.plans:
         plan_doc = frappe.get_doc("Subscription Plan", plan.plan)
-        rate = plan_doc.rate * plan.qty
+        rate = plan_doc.cost * plan.qty
         item = {
             "item_code": plan_doc.item,
             "qty": plan.qty,
