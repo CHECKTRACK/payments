@@ -38,48 +38,41 @@ def stripe_cancel_subscription(subscription_id):
             start_date = getdate(subscription_doc.start_date)
             cancel_after_months = 4
             cancel_at_date = add_months(start_date, cancel_after_months)  # cancel after 4 months
+            current_invoice_start_date = getdate(subscription_doc.current_invoice_start)
 
             # If current date < cancel_at_date, we must charge remaining months
             today = getdate(nowdate())
             if today < cancel_at_date:
-                remaining_months = (cancel_at_date.year - today.year) * 12 + (cancel_at_date.month - start_date.month)
+                remaining_months = (cancel_at_date.year - today.year) * 12 + (cancel_at_date.month - current_invoice_start_date.month)
 
                 if remaining_months > 0:
                     # Get Stripe Customer from ERPNext subscription
                     customer_id = stripe.Subscription.retrieve(stripe_subscription_id).customer
 
-                    # Retrieve plan price to charge remaining months
-                    total_amount = 0
-                    for plan in subscription_doc.plans:
-                        price_id = frappe.db.get_value("Subscription Plan", plan.plan, "product_price_id")
-                        # price_obj = stripe.Price.retrieve(price_id)
-                        # amount_per_month = price_obj["unit_amount"] / 100  # convert cents to dollars
-                        # plan_total = amount_per_month * remaining_months * plan.qty
-                        # total_amount += plan_total
-
-                        # Add item to pending Stripe invoice
-                        price_obj = stripe.Price.retrieve(price_id)
-                        amount_per_month = price_obj["unit_amount"]  # amount in cents
-
-                        stripe.InvoiceItem.create(
-                            customer=customer_id,
-                            amount=int(amount_per_month * plan.qty * remaining_months),
-                            currency=price_obj["currency"],
-                            description=f"Early cancellation charge for {remaining_months} remaining month(s)"
-                        )
-                        # stripe.InvoiceItem.create(
-                        #     customer=customer_id,
-                        #     price=price_id,
-                        #     quantity=plan.qty * remaining_months,
-                        #     description=f"Early cancellation charge for {remaining_months} remaining month(s)"
-                        # )
-
-                    # Create & charge the one-time invoice on Stripe
                     invoice = stripe.Invoice.create(
                         customer=customer_id,
-                        auto_advance=True, # finalize & charge automatically
-                        pending_invoice_items_behavior="include"
+                        auto_advance=False  # keep draft for adding items
                     )
+
+                    # Step 2: Create InvoiceItem(s) and attach to this invoice
+                    for plan in subscription_doc.plans:
+                        price_id = frappe.db.get_value("Subscription Plan", plan.plan, "product_price_id")
+                        price_obj = stripe.Price.retrieve(price_id)
+                        amount_per_month = price_obj["unit_amount"]
+                        currency = price_obj["currency"]
+
+                        total_amount = int(amount_per_month * plan.qty * remaining_months)
+                        if total_amount > 0:
+                            stripe.InvoiceItem.create(
+                                customer=customer_id,
+                                amount=total_amount,
+                                currency=currency,
+                                description=f"Early cancellation charge for {remaining_months} remaining month(s)",
+                                invoice=invoice.id  # <-- attach only to this invoice
+                            )
+
+                    # Step 3: Finalize & charge the invoice
+                    invoice = stripe.Invoice.finalize_invoice(invoice.id)
 
                     frappe.log_error(f"Created Stripe invoice {invoice.id} for {remaining_months} months", "Stripe Early Cancellation")
 
