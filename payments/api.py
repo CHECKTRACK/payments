@@ -52,7 +52,7 @@ def stripe_cancel_subscription(subscription_id):
 
                     invoice = stripe.Invoice.create(
                         customer=customer_id,
-                        auto_advance=True  # keep draft for adding items
+                        auto_advance=False  # keep draft for adding items
                     )
 
                     # Step 2: Create InvoiceItem(s) and attach to this invoice
@@ -74,6 +74,8 @@ def stripe_cancel_subscription(subscription_id):
 
                     # Step 3: Finalize & charge the invoice
                     invoice = stripe.Invoice.finalize_invoice(invoice.id)
+
+                    invoice = stripe.Invoice.pay(invoice.id)
 
                     frappe.log_error(f"Created Stripe invoice {invoice.id} for {remaining_months} months", "Stripe Early Cancellation")
 
