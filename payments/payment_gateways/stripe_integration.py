@@ -77,15 +77,34 @@ def create_subscription_on_stripe(stripe_settings):
 				email=payer_email,
 			)
 
-		subscription = stripe.Subscription.create(
-			customer=customer,
-			items=items,
-			add_invoice_items=item_one_time,
-			billing_mode={"type" : "flexible"},
-			off_session=True,
-			payment_behavior="error_if_incomplete",
-			proration_behavior="none"
-		)
+		start_date = datetime.datetime(2025, 11, 8, 0, 0)
+
+		# Get the current UTC time
+		now = datetime.datetime.utcnow()
+
+		# If today is before or on 8 Nov 2025 → delay start
+		if now <= start_date:
+			subscription = stripe.Subscription.create(
+				customer=customer,
+				items=items,
+				add_invoice_items=item_one_time,
+				billing_mode={"type": "flexible"},
+				off_session=True,
+				payment_behavior="error_if_incomplete",
+				proration_behavior="none",
+				start_date=int(start_date.timestamp())  # schedule start on 8 Nov
+			)
+		else:
+			# Start immediately
+			subscription = stripe.Subscription.create(
+				customer=customer,
+				items=items,
+				add_invoice_items=item_one_time,
+				billing_mode={"type": "flexible"},
+				off_session=True,
+				payment_behavior="error_if_incomplete",
+				proration_behavior="none"
+			)
 
 		if subscription.status == "active":
 			stripe_settings.integration_request.db_set("status", "Completed", update_modified=False)
