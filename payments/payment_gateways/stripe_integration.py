@@ -92,7 +92,7 @@ def create_subscription_on_stripe(stripe_settings):
 				off_session=True,
 				payment_behavior="error_if_incomplete",
 				proration_behavior="none",
-				billing_cycle_anchor=int(start_date.timestamp())  # schedule start on 8 Nov
+				billing_cycle_anchor="1762588800"  # schedule start on 8 Nov
 			)
 		else:
 			# Start immediately
