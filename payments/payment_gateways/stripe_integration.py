@@ -77,10 +77,11 @@ def create_subscription_on_stripe(stripe_settings):
 				email=payer_email,
 			)
 
-		start_date = datetime.datetime(2025, 11, 8, 0, 0)
+		tz = pytz.timezone("America/Los_Angeles")
+		start_date = datetime(2025, 11, 8, 0, 0, 0, tzinfo=tz)
 
 		# Get the current UTC time
-		now = datetime.datetime.utcnow()
+		now = datetime.now(tz)
 
 		# If today is before or on 8 Nov 2025 → delay start
 		if now <= start_date:
