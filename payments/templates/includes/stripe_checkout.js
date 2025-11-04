@@ -45,6 +45,15 @@ function setOutcome(result) {
 			callback: function(r) {
 				if (r.message.status == "Completed") {
 					$('#submit').hide()
+					frappe.msgprint({
+						title: __('🎉 Payment Successful'),
+						message: __(
+							`<div style="text-align:center; font-size:16px; padding:10px;">
+								<p><strong>Thank you for your purchase!</strong></p>
+							</div>`
+						),
+						indicator: 'green'
+					});
 					$('.success').show()
 					setTimeout(function() {
 						window.location.href = r.message.redirect_to

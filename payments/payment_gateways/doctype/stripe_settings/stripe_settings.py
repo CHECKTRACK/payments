@@ -273,7 +273,7 @@ class StripeSettings(Document):
 		if redirect_message:
 			redirect_url += "&" + urlencode({"redirect_message": redirect_message})
 
-		return {"redirect_to": redirect_url, "status": status}
+		return {"redirect_to": redirect_url, "status": status,"purchase_type":"Box Pack"}
 
 
 def get_gateway_controller(doctype, docname, payment_gateway=None):
