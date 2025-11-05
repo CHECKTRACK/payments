@@ -91,13 +91,31 @@ def make_payment(
 
 	gateway_controller = get_gateway_controller(reference_doctype, reference_docname, payment_gateway)
 
+	plan_name = frappe.form_dict.get("plan_name") or None
+	Box_pack_name = frappe.form_dict.get("box_pack_name") or None
+	success_message=None
+
 	if is_a_subscription(reference_doctype, reference_docname):
 		reference = frappe.get_doc(reference_doctype, reference_docname)
 		data = reference.create_subscription("stripe", gateway_controller, data)
+		success_message = f"""
+			Your <b>{plan_name}</b> has been activated successfully! <br>
+			"""
 	else:
 		data = frappe.get_doc("Stripe Settings", gateway_controller).create_request(data)
+		if Box_pack_name:
+			success_message = f"""
+			Your <b>{Box_pack_name}</b> has been purchased successfully! <br>
+			"""
+		else:
+			success_message = f"""
+			Your <b>Reservation</b> has been confirmed successfully! <br>
+			"""
+		
+
 
 	frappe.db.commit()
+	data["popup_message"] = success_message
 	return data
 
 

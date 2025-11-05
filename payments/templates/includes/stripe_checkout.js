@@ -47,11 +47,11 @@ function setOutcome(result) {
 					$('#submit').hide()
 					frappe.msgprint({
 						title: __('🎉 Payment Successful'),
-						message: __(
-							`<div style="text-align:center; font-size:16px; padding:10px;">
-								<p><strong>Thank you for your purchase!</strong></p>
-							</div>`
-						),
+						message: `
+							<div style="text-align:center; font-size:16px; padding:10px;">
+								<p><strong>${r.message.popup_message}</strong></p>
+							</div>
+						`,
 						indicator: 'green'
 					});
 					$('.success').show()
