@@ -48,8 +48,9 @@ function setOutcome(result) {
 					frappe.msgprint({
 						title: __('🎉 Payment Successful'),
 						message: `
-							<div style="text-align:center; font-size:16px; padding:10px;">
-								<p><strong>${r.message.popup_message}</strong></p>
+							<div style="text-align:center; font-size:16px; padding:2px;">
+								<p><strong>Your request has been successfully completed.</strong></p>
+								<p>Thank you for choosing us — we look forward to seeing you soon!</p>
 							</div>
 						`,
 						indicator: 'green'
