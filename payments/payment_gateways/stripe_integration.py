@@ -81,18 +81,22 @@ def create_subscription_on_stripe(stripe_settings):
             )
 
         # --- STEP 3: Check if this card already exists for the customer ---
-		existing_cards = stripe.Customer.list_sources(customer.id, object="card")
-		matched_card = None
+		existing_pms = stripe.PaymentMethod.list(customer=customer.id, type="card")
+		matched_pm = None
 
-		for card in existing_cards.data:
+		for pm in existing_pms.data:
+			card = pm.card
 			if card.fingerprint == new_fingerprint:
-				matched_card = card
+				matched_pm = pm
 				break
 
-		if matched_card:
-            # Card already saved → Make it default
-			stripe.Customer.modify(customer.id, default_source=matched_card.id)
-			selected_card_id = matched_card.id
+		if matched_pm:
+			# Card already exists → set as default
+			stripe.Customer.modify(
+				customer.id,
+				invoice_settings={"default_payment_method": matched_pm.id}
+			)
+			selected_card_id = matched_pm.id
 
 		else:
             # --- STEP 4: Validate card BEFORE saving (IMPORTANT FIX) ---
