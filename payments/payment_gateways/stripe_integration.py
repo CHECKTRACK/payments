@@ -97,13 +97,15 @@ def create_subscription_on_stripe(stripe_settings):
 		else:
             # --- STEP 4: Validate card BEFORE saving (IMPORTANT FIX) ---
 			setup_intent = stripe.SetupIntent.create(
-                payment_method_data={
-                    "type": "card",
-                    "card": {"token": token_id}
-                },
-                customer=customer.id,
-                confirm=True
-            )
+				customer=customer.id,
+				payment_method_data={
+					"type": "card",
+					"card": {"token": token_id}
+				},
+				payment_method_types=["card"],            # ← forces card only
+				confirm=True,
+				automatic_payment_methods={"enabled": False}  # ← disable redirect methods
+			)
 
 			if setup_intent.status != "succeeded":
 				frappe.throw(_("Card validation failed. Please use another card."))
