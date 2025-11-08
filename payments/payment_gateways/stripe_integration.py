@@ -111,9 +111,16 @@ def create_subscription_on_stripe(stripe_settings):
 				frappe.throw(_("Card validation failed. Please use another card."))
 
             # --- STEP 5: Validation succeeded → Now attach card ---
-			new_source = stripe.Customer.create_source(customer.id, source=token_id)
-			stripe.Customer.modify(customer.id, default_source=new_source.id)
-			selected_card_id = new_source.id
+			payment_method_id = setup_intent.payment_method
+			stripe.PaymentMethod.attach(
+				payment_method_id,
+				customer=customer.id,
+			)
+			stripe.Customer.modify(
+				customer.id,
+				invoice_settings={"default_payment_method": payment_method_id}
+			)
+			selected_card_id = payment_method_id
 
 		tz = pytz.timezone("America/Los_Angeles")
 		start_date = datetime(2025, 11, 8, 0, 0, 0, tzinfo=tz)
