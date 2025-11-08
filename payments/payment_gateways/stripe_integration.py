@@ -70,6 +70,26 @@ def create_subscription_on_stripe(stripe_settings):
 		
 		if existing_customers.data and len(existing_customers.data) > 0:
 			customer = existing_customers.data[0]
+			# Get card fingerprint from token
+			token_card = stripe.Token.retrieve(token_id).card
+			new_fingerprint = token_card.fingerprint
+
+			# List all existing customer cards
+			existing_cards = stripe.Customer.list_sources(customer.id, object="card")
+			matched_card = None
+
+			for card in existing_cards.data:
+				if card.fingerprint == new_fingerprint:
+					matched_card = card
+					break
+
+			if matched_card:
+				# Card already exists → set as default
+				stripe.Customer.modify(customer.id, default_source=matched_card.id)
+			else:
+				# Attach new card and set default
+				new_source = stripe.Customer.create_source(customer.id, source=token_id)
+				stripe.Customer.modify(customer.id, default_source=new_source.id)
 		else:
 			customer = stripe.Customer.create(
 				source=token_id,
