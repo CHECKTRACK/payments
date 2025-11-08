@@ -66,36 +66,52 @@ def create_subscription_on_stripe(stripe_settings):
 		payer_name = stripe_settings.data.payer_name
 		token_id = stripe_settings.data.stripe_token_id
 		
+		# --- STEP 1: Get fingerprint of the incoming card from token ---
+		token_card = stripe.Token.retrieve(token_id).card
+		new_fingerprint = token_card.fingerprint
+
+        # --- STEP 2: Find or create customer by email ---
 		existing_customers = stripe.Customer.list(email=payer_email, limit=1)
-		
-		if existing_customers.data and len(existing_customers.data) > 0:
+		if existing_customers.data:
 			customer = existing_customers.data[0]
-			# Get card fingerprint from token
-			token_card = stripe.Token.retrieve(token_id).card
-			new_fingerprint = token_card.fingerprint
-
-			# List all existing customer cards
-			existing_cards = stripe.Customer.list_sources(customer.id, object="card")
-			matched_card = None
-
-			for card in existing_cards.data:
-				if card.fingerprint == new_fingerprint:
-					matched_card = card
-					break
-
-			if matched_card:
-				# Card already exists → set as default
-				stripe.Customer.modify(customer.id, default_source=matched_card.id)
-			else:
-				# Attach new card and set default
-				new_source = stripe.Customer.create_source(customer.id, source=token_id)
-				stripe.Customer.modify(customer.id, default_source=new_source.id)
 		else:
 			customer = stripe.Customer.create(
-				source=token_id,
-				description=payer_name,
-				email=payer_email,
-			)
+                description=payer_name,
+                email=payer_email
+            )
+
+        # --- STEP 3: Check if this card already exists for the customer ---
+		existing_cards = stripe.Customer.list_sources(customer.id, object="card")
+		matched_card = None
+
+		for card in existing_cards.data:
+			if card.fingerprint == new_fingerprint:
+				matched_card = card
+				break
+
+		if matched_card:
+            # Card already saved → Make it default
+			stripe.Customer.modify(customer.id, default_source=matched_card.id)
+			selected_card_id = matched_card.id
+
+		else:
+            # --- STEP 4: Validate card BEFORE saving (IMPORTANT FIX) ---
+			setup_intent = stripe.SetupIntent.create(
+                payment_method_data={
+                    "type": "card",
+                    "card": {"token": token_id}
+                },
+                customer=customer.id,
+                confirm=True
+            )
+
+			if setup_intent.status != "succeeded":
+				frappe.throw(_("Card validation failed. Please use another card."))
+
+            # --- STEP 5: Validation succeeded → Now attach card ---
+			new_source = stripe.Customer.create_source(customer.id, source=token_id)
+			stripe.Customer.modify(customer.id, default_source=new_source.id)
+			selected_card_id = new_source.id
 
 		tz = pytz.timezone("America/Los_Angeles")
 		start_date = datetime(2025, 11, 8, 0, 0, 0, tzinfo=tz)
