@@ -56,7 +56,7 @@ def create_subscription_on_stripe(stripe_settings):
 	discount_items = []
 	for payment_plan in stripe_settings.payment_plans:
 		plan = frappe.db.get_value("Subscription Plan",payment_plan.plan,["product_price_id", "custom_product_coupons_id"],as_dict=True)
-		subscription_name = frappe.db.get_value("Subscription",{"party": customer, "status": "Unpaid"},order_by="creation desc")
+		subscription_name = frappe.db.get_value("Subscription",{"party": stripe_settings.data.payer_email, "status": "Unpaid"},order_by="creation desc")
 		subscription_data = frappe.get_doc("Subscription", subscription_name)
 		if plan.custom_product_coupons_id and subscription_data.custom_coupon_code:
 			discount_items.append({"coupon": plan.custom_product_coupons_id})
