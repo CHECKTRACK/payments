@@ -61,9 +61,9 @@ def create_subscription_on_stripe(stripe_settings):
 
 		price_obj = stripe.Price.retrieve(plan.product_price_id)
 		if price_obj["type"] == "recurring":
-			items.append({"price": plan.product_price_id, "quantity": payment_plan.qty})
+			items.append({"price": plan.product_price_id, "quantity": 1})
 		elif price_obj["type"] == "one_time":
-			item_one_time.append({"price": plan.product_price_id, "quantity": payment_plan.qty})
+			item_one_time.append({"price": plan.product_price_id, "quantity": 1})
 
 
 	try:
