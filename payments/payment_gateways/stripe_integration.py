@@ -53,13 +53,18 @@ def create_stripe_subscription(gateway_controller, data):
 def create_subscription_on_stripe(stripe_settings):
 	items = []
 	item_one_time = []
+	discount_items = []
 	for payment_plan in stripe_settings.payment_plans:
-		plan = frappe.db.get_value("Subscription Plan", payment_plan.plan, "product_price_id")
-		price_obj = stripe.Price.retrieve(plan)
+		plan = frappe.db.get_value("Subscription Plan",payment_plan.plan,["product_price_id", "custom_product_coupons_id"],as_dict=True)
+		if plan.custom_product_coupons_id:
+			discount_items.append({"coupon": plan.custom_product_coupons_id})
+
+		price_obj = stripe.Price.retrieve(plan.product_price_id)
 		if price_obj["type"] == "recurring":
-			items.append({"price": plan, "quantity": payment_plan.qty})
+			items.append({"price": plan.product_price_id, "quantity": payment_plan.qty})
 		elif price_obj["type"] == "one_time":
-			item_one_time.append({"price": plan, "quantity": payment_plan.qty})
+			item_one_time.append({"price": plan.product_price_id, "quantity": payment_plan.qty})
+
 
 	try:
 		payer_email = stripe_settings.data.payer_email
@@ -136,6 +141,7 @@ def create_subscription_on_stripe(stripe_settings):
 		if now <= start_date:
 			subscription = stripe.Subscription.create(
 				customer=customer,
+				discounts=discount_items,
 				items=items,
 				add_invoice_items=item_one_time,
 				billing_mode={"type": "flexible"},
@@ -148,6 +154,7 @@ def create_subscription_on_stripe(stripe_settings):
 			# Start immediately
 			subscription = stripe.Subscription.create(
 				customer=customer,
+				discounts=discount_items,
 				items=items,
 				add_invoice_items=item_one_time,
 				billing_mode={"type": "flexible"},
