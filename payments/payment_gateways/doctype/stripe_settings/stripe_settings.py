@@ -239,11 +239,11 @@ class StripeSettings(Document):
 				if current_time - booking_start > timedelta(hours=24):
 					frappe.log_error("current_time - booking_start",current_time - booking_start)
 					frappe.log_error("timedelta(hours=24)",timedelta(hours=24))
-					frappe.log_error("current_time - booking_start > timedelta(hours=24)",current_time - booking_start > timedelta(hours=24))
+					frappe.log_error("current_time - booking_start > timedelta(hours=24)",f"{current_time - booking_start > timedelta(hours=24)}")
 				else:
 					frappe.log_error("current_time - booking_start",current_time - booking_start)
 					frappe.log_error("timedelta(hours=24)",timedelta(hours=24))
-					frappe.log_error("current_time - booking_start > timedelta(hours=24)",current_time - booking_start > timedelta(hours=24))
+					frappe.log_error("current_time - booking_start > timedelta(hours=24)",f"{current_time - booking_start > timedelta(hours=24)}")
 			else:
 				charge = stripe.Charge.create(
 					amount=cint(flt(self.data.amount) * 100),
