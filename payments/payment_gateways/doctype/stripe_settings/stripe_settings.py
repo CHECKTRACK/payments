@@ -8,6 +8,8 @@ from frappe import _
 from frappe.integrations.utils import create_request_log, make_get_request
 from frappe.model.document import Document
 from frappe.utils import call_hook_method, cint, flt, get_url
+from datetime import timedelta
+from frappe.utils import get_datetime, now_datetime
 
 from payments.utils import create_payment_gateway
 
@@ -217,13 +219,39 @@ class StripeSettings(Document):
 		import stripe
 
 		try:
-			charge = stripe.Charge.create(
-				amount=cint(flt(self.data.amount) * 100),
-				currency=self.data.currency,
-				source=self.data.stripe_token_id,
-				description=self.data.description,
-				receipt_email=self.data.payer_email,
-			)
+			if self.data.description.startswith("Payment Request for "):
+				sales_invoice_id = self.data.description.replace("Payment Request for ", "")
+				booking = frappe.get_all(
+					"Booking",
+					filters={"sales_invoice_id": sales_invoice_id},
+					limit=1
+				)
+			if booking:
+				booking_id = booking[0].name
+				booking = frappe.get_doc("Booking", booking_id)
+
+				booking_start = get_datetime(booking.from_datetime)
+				current_time = now_datetime()
+				frappe.log_error("current_time",current_time)
+				frappe.log_error("booking_start",booking_start)
+
+				# Check if difference is greater than 24 hours
+				if current_time - booking_start > timedelta(hours=24):
+					frappe.log_error("current_time - booking_start",current_time - booking_start)
+					frappe.log_error("timedelta(hours=24)",timedelta(hours=24))
+					frappe.log_error("current_time - booking_start > timedelta(hours=24)",current_time - booking_start > timedelta(hours=24))
+				else:
+					frappe.log_error("current_time - booking_start",current_time - booking_start)
+					frappe.log_error("timedelta(hours=24)",timedelta(hours=24))
+					frappe.log_error("current_time - booking_start > timedelta(hours=24)",current_time - booking_start > timedelta(hours=24))
+			else:
+				charge = stripe.Charge.create(
+					amount=cint(flt(self.data.amount) * 100),
+					currency=self.data.currency,
+					source=self.data.stripe_token_id,
+					description=self.data.description,
+					receipt_email=self.data.payer_email,
+				)
 
 			if charge.captured == True:
 				self.integration_request.db_set("status", "Completed", update_modified=False)
