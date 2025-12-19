@@ -9,6 +9,7 @@ from frappe.integrations.utils import create_request_log, make_get_request
 from frappe.model.document import Document
 from frappe.utils import call_hook_method, cint, flt, get_url
 from datetime import timedelta
+import pytz
 from frappe.utils import get_datetime, now_datetime
 
 from payments.utils import create_payment_gateway
@@ -231,7 +232,7 @@ class StripeSettings(Document):
 				booking = frappe.get_doc("Booking", booking_id)
 
 				booking_start = get_datetime(booking.from_datetime)
-				current_time = now_datetime()
+				current_time = now_datetime().astimezone(pytz.timezone("America/Los_Angeles"))
 				frappe.log_error("current_time",current_time)
 				frappe.log_error("booking_start",booking_start)
 
