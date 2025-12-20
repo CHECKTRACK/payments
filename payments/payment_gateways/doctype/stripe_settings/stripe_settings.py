@@ -236,7 +236,9 @@ class StripeSettings(Document):
 				frappe.log_error("utc_now",utc_now)
 				la_time = utc_now.astimezone(pytz.timezone("America/Los_Angeles"))
 				frappe.log_error("la_time",la_time)
-				current_time = get_datetime(la_time)
+				current_time_la_naive = la_time.replace(tzinfo=None)
+				frappe.log_error("current_time_la_naive",current_time_la_naive)
+				current_time = get_datetime(current_time_la_naive)
 				frappe.log_error("current_time",current_time)
 				frappe.log_error("booking_start",booking_start)
 
