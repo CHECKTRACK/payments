@@ -254,6 +254,7 @@ class StripeSettings(Document):
 						amount=cint(flt(self.data.amount) * 100),
 						currency=self.data.currency,
 						payment_method=payment_method.id,
+						receipt_email=self.data.payer_email,
 						capture_method="manual",
 						confirm=True,
 						automatic_payment_methods={
@@ -262,13 +263,20 @@ class StripeSettings(Document):
 						}
 					)
 
-					frappe.log_error("payment_intent_id",intent.id)
-					self.integration_request.db_set("status", "Completed", update_modified=False)
-					self.flags.status_changed_to = "Completed"
+					if intent.id:
+						frappe.log_error("payment_intent_id",intent.id)
+						booking.payment_intent_id = intent.id
+						booking.status = "Confirmed"
+						booking.payment_status = "Hold"
+						booking.save(ignore_permissions=True)
+						self.integration_request.db_set("status", "Completed", update_modified=False)
+						self.flags.status_changed_to = "Completed"
 
-					frappe.log_error("booking_start - current_time",booking_start - current_time)
-					frappe.log_error("timedelta(hours=24)",timedelta(hours=24))
-					frappe.log_error("booking_start - current_time > timedelta(hours=24)",f"{booking_start - current_time > timedelta(hours=24)}")
+						frappe.log_error("booking_start - current_time",booking_start - current_time)
+						frappe.log_error("timedelta(hours=24)",timedelta(hours=24))
+						frappe.log_error("booking_start - current_time > timedelta(hours=24)",f"{booking_start - current_time > timedelta(hours=24)}")
+					else:
+						frappe.log_error(charge.failure_message, "Stripe Payment not completed")
 				else:
 					charge = stripe.Charge.create(
 						amount=cint(flt(self.data.amount) * 100),
