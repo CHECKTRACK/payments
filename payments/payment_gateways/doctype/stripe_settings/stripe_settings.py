@@ -252,7 +252,7 @@ class StripeSettings(Document):
 
 					intent = stripe.PaymentIntent.create(
 						amount=cint(flt(self.data.amount) * 100),
-						currency=self.data.currency.lower(),
+						currency=self.data.currency,
 						payment_method=payment_method.id,
 						capture_method="manual",
 						confirm=True,
@@ -283,7 +283,7 @@ class StripeSettings(Document):
 						self.flags.status_changed_to = "Completed"
 					else:
 						frappe.log_error(charge.failure_message, "Stripe Payment not completed")
-						
+
 					frappe.log_error("booking_start - current_time",booking_start - current_time)
 					frappe.log_error("timedelta(hours=24)",timedelta(hours=24))
 					frappe.log_error("booking_start - current_time > timedelta(hours=24)",f"{booking_start - current_time > timedelta(hours=24)}")
