@@ -255,7 +255,11 @@ class StripeSettings(Document):
 						currency=self.data.currency,
 						payment_method=payment_method.id,
 						capture_method="manual",
-						confirm=True
+						confirm=True,
+						automatic_payment_methods={
+							"enabled": True,
+							"allow_redirects": "never"
+						}
 					)
 
 					frappe.log_error("payment_intent_id",intent.id)
@@ -277,6 +281,9 @@ class StripeSettings(Document):
 					if charge.captured == True:
 						self.integration_request.db_set("status", "Completed", update_modified=False)
 						self.flags.status_changed_to = "Completed"
+					else:
+						frappe.log_error(charge.failure_message, "Stripe Payment not completed")
+
 					frappe.log_error("booking_start - current_time",booking_start - current_time)
 					frappe.log_error("timedelta(hours=24)",timedelta(hours=24))
 					frappe.log_error("booking_start - current_time > timedelta(hours=24)",f"{booking_start - current_time > timedelta(hours=24)}")
@@ -289,12 +296,12 @@ class StripeSettings(Document):
 					receipt_email=self.data.payer_email,
 				)
 
-			if charge.captured == True:
-				self.integration_request.db_set("status", "Completed", update_modified=False)
-				self.flags.status_changed_to = "Completed"
+				if charge.captured == True:
+					self.integration_request.db_set("status", "Completed", update_modified=False)
+					self.flags.status_changed_to = "Completed"
 
-			else:
-				frappe.log_error(charge.failure_message, "Stripe Payment not completed")
+				else:
+					frappe.log_error(charge.failure_message, "Stripe Payment not completed")
 
 		except Exception:
 			frappe.log_error(frappe.get_traceback())
