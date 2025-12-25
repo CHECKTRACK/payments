@@ -229,72 +229,102 @@ class StripeSettings(Document):
 					limit=1
 				)
 			if booking:
-				booking_id = booking[0].name
-				booking = frappe.get_doc("Booking", booking_id)
+				pr = frappe.get_doc("Payment Request", booking.payment_request_id)
+				if pr.status not in ["Paid", "Cancelled"]:
+					booking_id = booking[0].name
+					booking = frappe.get_doc("Booking", booking_id)
 
-				booking_start = get_datetime(booking.from_datetime)
-				utc_now = datetime.now(pytz.utc)
-				frappe.log_error("utc_now",utc_now)
-				la_time = utc_now.astimezone(pytz.timezone("America/Los_Angeles"))
-				frappe.log_error("la_time",la_time)
-				current_time_la_naive = la_time.replace(tzinfo=None)
-				frappe.log_error("current_time_la_naive",current_time_la_naive)
-				current_time = get_datetime(current_time_la_naive)
-				frappe.log_error("current_time",current_time)
-				frappe.log_error("booking_start",booking_start)
+					booking_start = get_datetime(booking.from_datetime)
+					utc_now = datetime.now(pytz.utc)
+					frappe.log_error("utc_now",utc_now)
+					la_time = utc_now.astimezone(pytz.timezone("America/Los_Angeles"))
+					frappe.log_error("la_time",la_time)
+					current_time_la_naive = la_time.replace(tzinfo=None)
+					frappe.log_error("current_time_la_naive",current_time_la_naive)
+					current_time = get_datetime(current_time_la_naive)
+					frappe.log_error("current_time",current_time)
+					frappe.log_error("booking_start",booking_start)
 
-				# Check if difference is greater than 24 hours
-				if booking_start - current_time > timedelta(hours=24):
-					payment_method = stripe.PaymentMethod.create(
-						type="card",
-						card={"token": self.data.stripe_token_id}
-					)
+					# Check if difference is greater than 24 hours
+					settings = frappe.get_doc("Booking Cancellation Settings","Booking Cancellation Settings")
+					cutoff_hours = settings.hours_before_full_refund
+					if settings.is_active and booking_start - current_time > timedelta(hours=cutoff_hours):
+						payment_method = stripe.PaymentMethod.create(
+							type="card",
+							card={"token": self.data.stripe_token_id}
+						)
 
-					intent = stripe.PaymentIntent.create(
-						amount=cint(flt(self.data.amount) * 100),
-						currency=self.data.currency,
-						payment_method=payment_method.id,
-						receipt_email=self.data.payer_email,
-						capture_method="manual",
-						confirm=True,
-						automatic_payment_methods={
-							"enabled": True,
-							"allow_redirects": "never"
-						}
-					)
+						intent = stripe.PaymentIntent.create(
+							amount=cint(flt(self.data.amount) * 100),
+							currency=self.data.currency,
+							payment_method=payment_method.id,
+							receipt_email=self.data.payer_email,
+							capture_method="manual",
+							confirm=True,
+							automatic_payment_methods={
+								"enabled": True,
+								"allow_redirects": "never"
+							}
+						)
 
-					if intent.id:
-						frappe.log_error("payment_intent_id",intent.id)
-						booking.payment_intent_id = intent.id
-						booking.status = "Confirmed"
-						booking.payment_status = "Hold"
-						booking.save(ignore_permissions=True)
-						self.integration_request.db_set("status", "Completed", update_modified=False)
-						self.flags.status_changed_to = "Completed"
+						if intent.id:
+							frappe.log_error("payment_intent_id",intent.id)
+							booking.payment_intent_id = intent.id
+							booking.status = "Confirmed"
+							booking.payment_status = "Hold"
+							booking.save(ignore_permissions=True)
+							if booking.coupon_code:
+								frappe.get_doc({
+									"doctype": "SS-Coupon Usage Log",
+									"coupon_code": booking.coupon_code,
+									"user": booking.created_by,
+									"customer":booking.customer,
+								}).insert(ignore_permissions=True)
+							if booking.ss_package:
+								ss_packageDoc = frappe.get_doc("SS-Package",booking.ss_package)
+								ss_packageDoc.available_minutes =ss_packageDoc.available_minutes - booking.package_free_minutes_used
+								ss_packageDoc.save(ignore_permissions=True)
+							
+							userWallet = frappe.db.get_value("User Wallet", {"customer":booking.customer})
+							if userWallet:
+								userWalletDoc = frappe.get_doc("User Wallet",userWallet)
+								userWalletDoc.credit = userWalletDoc.credit - booking.booking_credit_used
+								userWalletDoc.save(ignore_permissions=True)
+							
+							for slot in booking.booked_slot:
+								slot_doc = frappe.get_doc("Time Slot", slot.time_slot)
+								slot_doc.status = "Booked"
+								slot_doc.save(ignore_permissions=True)
+							self.integration_request.db_set("status", "Completed", update_modified=False)
+							self.flags.status_changed_to = "Completed"
+
+							frappe.log_error("booking_start - current_time",booking_start - current_time)
+							frappe.log_error("timedelta(hours=24)",timedelta(hours=24))
+							frappe.log_error("booking_start - current_time > timedelta(hours=24)",f"{booking_start - current_time > timedelta(hours=24)}")
+						else:
+							frappe.log_error(charge.failure_message, "Stripe Payment not completed")
+					else:
+						charge = stripe.Charge.create(
+							amount=cint(flt(self.data.amount) * 100),
+							currency=self.data.currency,
+							source=self.data.stripe_token_id,
+							description=self.data.description,
+							receipt_email=self.data.payer_email,
+						)
+
+						if charge.captured == True:
+							self.integration_request.db_set("status", "Completed", update_modified=False)
+							self.flags.status_changed_to = "Completed"
+						else:
+							frappe.log_error(charge.failure_message, "Stripe Payment not completed")
 
 						frappe.log_error("booking_start - current_time",booking_start - current_time)
 						frappe.log_error("timedelta(hours=24)",timedelta(hours=24))
 						frappe.log_error("booking_start - current_time > timedelta(hours=24)",f"{booking_start - current_time > timedelta(hours=24)}")
-					else:
-						frappe.log_error(charge.failure_message, "Stripe Payment not completed")
 				else:
-					charge = stripe.Charge.create(
-						amount=cint(flt(self.data.amount) * 100),
-						currency=self.data.currency,
-						source=self.data.stripe_token_id,
-						description=self.data.description,
-						receipt_email=self.data.payer_email,
-					)
-
-					if charge.captured == True:
-						self.integration_request.db_set("status", "Completed", update_modified=False)
-						self.flags.status_changed_to = "Completed"
-					else:
-						frappe.log_error(charge.failure_message, "Stripe Payment not completed")
-
-					frappe.log_error("booking_start - current_time",booking_start - current_time)
-					frappe.log_error("timedelta(hours=24)",timedelta(hours=24))
-					frappe.log_error("booking_start - current_time > timedelta(hours=24)",f"{booking_start - current_time > timedelta(hours=24)}")
+					self.integration_request.db_set("status", "Failed", update_modified=False)
+					self.flags.status_changed_to = "Failed"
+					frappe.log_error("Payment Link Expired", f"Payment Link Expired {pr.name}")
 			else:
 				charge = stripe.Charge.create(
 					amount=cint(flt(self.data.amount) * 100),
@@ -341,6 +371,8 @@ class StripeSettings(Document):
 			if self.redirect_url:
 				redirect_url = self.redirect_url
 				redirect_to = None
+		elif self.flags.status_changed_to == "Failed":
+			frappe.throw()
 		else:
 			redirect_url = "payment-failed"
 
