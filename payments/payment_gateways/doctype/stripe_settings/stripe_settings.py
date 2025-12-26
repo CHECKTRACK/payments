@@ -372,7 +372,7 @@ class StripeSettings(Document):
 				redirect_url = self.redirect_url
 				redirect_to = None
 		elif self.flags.status_changed_to == "Failed":
-			frappe.throw()
+			frappe.throw("Payment Link Expired")
 		else:
 			redirect_url = "payment-failed"
 
