@@ -236,14 +236,14 @@ class StripeSettings(Document):
 
 					booking_start = get_datetime(booking.from_datetime)
 					utc_now = datetime.now(pytz.utc)
-					frappe.log_error("utc_now",utc_now)
+					# frappe.log_error("utc_now",utc_now)
 					la_time = utc_now.astimezone(pytz.timezone("America/Los_Angeles"))
-					frappe.log_error("la_time",la_time)
+					# frappe.log_error("la_time",la_time)
 					current_time_la_naive = la_time.replace(tzinfo=None)
-					frappe.log_error("current_time_la_naive",current_time_la_naive)
+					# frappe.log_error("current_time_la_naive",current_time_la_naive)
 					current_time = get_datetime(current_time_la_naive)
-					frappe.log_error("current_time",current_time)
-					frappe.log_error("booking_start",booking_start)
+					# frappe.log_error("current_time",current_time)
+					# frappe.log_error("booking_start",booking_start)
 
 					# Check if difference is greater than 24 hours
 					settings = frappe.get_doc("Booking Cancellation Settings","Booking Cancellation Settings")
@@ -298,9 +298,9 @@ class StripeSettings(Document):
 							self.integration_request.db_set("status", "Completed", update_modified=False)
 							self.flags.status_changed_to = "Completed"
 
-							frappe.log_error("booking_start - current_time",booking_start - current_time)
-							frappe.log_error("timedelta(hours=24)",timedelta(hours=24))
-							frappe.log_error("booking_start - current_time > timedelta(hours=24)",f"{booking_start - current_time > timedelta(hours=24)}")
+							# frappe.log_error("booking_start - current_time",booking_start - current_time)
+							# frappe.log_error("timedelta(hours=24)",timedelta(hours=24))
+							# frappe.log_error("booking_start - current_time > timedelta(hours=24)",f"{booking_start - current_time > timedelta(hours=24)}")
 						else:
 							frappe.log_error(charge.failure_message, "Stripe Payment not completed")
 					else:
@@ -318,9 +318,9 @@ class StripeSettings(Document):
 						else:
 							frappe.log_error(charge.failure_message, "Stripe Payment not completed")
 
-						frappe.log_error("booking_start - current_time",booking_start - current_time)
-						frappe.log_error("timedelta(hours=24)",timedelta(hours=24))
-						frappe.log_error("booking_start - current_time > timedelta(hours=24)",f"{booking_start - current_time > timedelta(hours=24)}")
+						# frappe.log_error("booking_start - current_time",booking_start - current_time)
+						# frappe.log_error("timedelta(hours=24)",timedelta(hours=24))
+						# frappe.log_error("booking_start - current_time > timedelta(hours=24)",f"{booking_start - current_time > timedelta(hours=24)}")
 				else:
 					self.integration_request.db_set("status", "Failed", update_modified=False)
 					self.flags.status_changed_to = "Failed"
