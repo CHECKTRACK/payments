@@ -220,21 +220,21 @@ class StripeSettings(Document):
 		import stripe
 
 		try:
-			booking = None
+			bookings = None
 			if self.data.description.startswith("Payment Request for "):
 				sales_invoice_id = self.data.description.replace("Payment Request for ", "")
-				booking = frappe.get_all(
+				bookings = frappe.get_all(
 					"Booking",
 					filters={"sales_invoice_id": sales_invoice_id},
 					limit=1
 				)
-			if booking:
-				pr = frappe.get_doc("Payment Request", booking.payment_request_id)
+			if len(bookings) > 0:
+				pr = frappe.get_doc("Payment Request", bookings[0].payment_request_id)
 				if pr.status not in ["Paid", "Cancelled"]:
-					booking_id = booking[0].name
-					booking = frappe.get_doc("Booking", booking_id)
+					booking_id = bookings[0].name
+					booking_doc = frappe.get_doc("Booking", booking_id)
 
-					booking_start = get_datetime(booking.from_datetime)
+					booking_start = get_datetime(booking_doc.from_datetime)
 					utc_now = datetime.now(pytz.utc)
 					# frappe.log_error("utc_now",utc_now)
 					la_time = utc_now.astimezone(pytz.timezone("America/Los_Angeles"))
@@ -269,29 +269,29 @@ class StripeSettings(Document):
 
 						if intent.id:
 							frappe.log_error("payment_intent_id",intent.id)
-							booking.payment_intent_id = intent.id
-							booking.status = "Confirmed"
-							booking.payment_status = "Hold"
-							booking.save(ignore_permissions=True)
-							if booking.coupon_code:
+							booking_doc.payment_intent_id = intent.id
+							booking_doc.status = "Confirmed"
+							booking_doc.payment_status = "Hold"
+							booking_doc.save(ignore_permissions=True)
+							if booking_doc.coupon_code:
 								frappe.get_doc({
 									"doctype": "SS-Coupon Usage Log",
-									"coupon_code": booking.coupon_code,
-									"user": booking.created_by,
-									"customer":booking.customer,
+									"coupon_code": booking_doc.coupon_code,
+									"user": booking_doc.created_by,
+									"customer":booking_doc.customer,
 								}).insert(ignore_permissions=True)
-							if booking.ss_package:
-								ss_packageDoc = frappe.get_doc("SS-Package",booking.ss_package)
-								ss_packageDoc.available_minutes =ss_packageDoc.available_minutes - booking.package_free_minutes_used
+							if booking_doc.ss_package:
+								ss_packageDoc = frappe.get_doc("SS-Package",booking_doc.ss_package)
+								ss_packageDoc.available_minutes =ss_packageDoc.available_minutes - booking_doc.package_free_minutes_used
 								ss_packageDoc.save(ignore_permissions=True)
 							
-							userWallet = frappe.db.get_value("User Wallet", {"customer":booking.customer})
+							userWallet = frappe.db.get_value("User Wallet", {"customer":booking_doc.customer})
 							if userWallet:
 								userWalletDoc = frappe.get_doc("User Wallet",userWallet)
-								userWalletDoc.credit = userWalletDoc.credit - booking.booking_credit_used
+								userWalletDoc.credit = userWalletDoc.credit - booking_doc.booking_credit_used
 								userWalletDoc.save(ignore_permissions=True)
 							
-							for slot in booking.booked_slot:
+							for slot in booking_doc.booked_slot:
 								slot_doc = frappe.get_doc("Time Slot", slot.time_slot)
 								slot_doc.status = "Booked"
 								slot_doc.save(ignore_permissions=True)
