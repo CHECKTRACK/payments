@@ -54,6 +54,9 @@ def create_subscription_on_stripe(stripe_settings):
 	items = []
 	item_one_time = []
 	discount_items = []
+	payment_request_doc = frappe.get_doc("Payment Request", stripe_settings.data.reference_docname)
+	sales_invoice_doc = frappe.get_doc("Sales Invoice", payment_request_doc.reference_name)
+	subscription_data = frappe.get_doc("Subscription", sales_invoice_doc.subscription)
 	for payment_plan in stripe_settings.payment_plans:
 		plan = frappe.db.get_value("Subscription Plan",payment_plan.plan,["product_price_id", "custom_product_coupons_id"],as_dict=True)
 		if plan.custom_product_coupons_id:
@@ -67,109 +70,114 @@ def create_subscription_on_stripe(stripe_settings):
 
 
 	try:
-		payer_email = stripe_settings.data.payer_email
-		payer_name = stripe_settings.data.payer_name
-		token_id = stripe_settings.data.stripe_token_id
-		
-		# --- STEP 1: Get fingerprint of the incoming card from token ---
-		token_card = stripe.Token.retrieve(token_id).card
-		new_fingerprint = token_card.fingerprint
+		if subscription_data.status != "Cancelled":
+			payer_email = stripe_settings.data.payer_email
+			payer_name = stripe_settings.data.payer_name
+			token_id = stripe_settings.data.stripe_token_id
+			
+			# --- STEP 1: Get fingerprint of the incoming card from token ---
+			token_card = stripe.Token.retrieve(token_id).card
+			new_fingerprint = token_card.fingerprint
 
-        # --- STEP 2: Find or create customer by email ---
-		existing_customers = stripe.Customer.list(email=payer_email, limit=1)
-		if existing_customers.data:
-			customer = existing_customers.data[0]
-		else:
-			customer = stripe.Customer.create(
-                description=payer_name,
-                email=payer_email
-            )
+			# --- STEP 2: Find or create customer by email ---
+			existing_customers = stripe.Customer.list(email=payer_email, limit=1)
+			if existing_customers.data:
+				customer = existing_customers.data[0]
+			else:
+				customer = stripe.Customer.create(
+					description=payer_name,
+					email=payer_email
+				)
 
-        # --- STEP 3: Check if this card already exists for the customer ---
-		existing_pms = stripe.PaymentMethod.list(customer=customer.id, type="card")
-		matched_pm = None
+			# --- STEP 3: Check if this card already exists for the customer ---
+			existing_pms = stripe.PaymentMethod.list(customer=customer.id, type="card")
+			matched_pm = None
 
-		for pm in existing_pms.data:
-			card = pm.card
-			if card.fingerprint == new_fingerprint:
-				matched_pm = pm
-				break
+			for pm in existing_pms.data:
+				card = pm.card
+				if card.fingerprint == new_fingerprint:
+					matched_pm = pm
+					break
 
-		if matched_pm:
-			# Card already exists → set as default
-			stripe.Customer.modify(
-				customer.id,
-				invoice_settings={"default_payment_method": matched_pm.id}
-			)
-			selected_card_id = matched_pm.id
+			if matched_pm:
+				# Card already exists → set as default
+				stripe.Customer.modify(
+					customer.id,
+					invoice_settings={"default_payment_method": matched_pm.id}
+				)
+				selected_card_id = matched_pm.id
 
-		else:
-            # --- STEP 4: Validate card BEFORE saving (IMPORTANT FIX) ---
-			setup_intent = stripe.SetupIntent.create(
-				customer=customer.id,
-				payment_method_data={
-					"type": "card",
-					"card": {"token": token_id}
-				},
-				payment_method_types=["card"],            # ← forces card only
-				confirm=True,
-				automatic_payment_methods={"enabled": False}  # ← disable redirect methods
-			)
+			else:
+				# --- STEP 4: Validate card BEFORE saving (IMPORTANT FIX) ---
+				setup_intent = stripe.SetupIntent.create(
+					customer=customer.id,
+					payment_method_data={
+						"type": "card",
+						"card": {"token": token_id}
+					},
+					payment_method_types=["card"],            # ← forces card only
+					confirm=True,
+					automatic_payment_methods={"enabled": False}  # ← disable redirect methods
+				)
 
-			if setup_intent.status != "succeeded":
-				frappe.throw(_("Card validation failed. Please use another card."))
+				if setup_intent.status != "succeeded":
+					frappe.throw(_("Card validation failed. Please use another card."))
 
-            # --- STEP 5: Validation succeeded → Now attach card ---
-			payment_method_id = setup_intent.payment_method
-			stripe.PaymentMethod.attach(
-				payment_method_id,
-				customer=customer.id,
-			)
-			stripe.Customer.modify(
-				customer.id,
-				invoice_settings={"default_payment_method": payment_method_id}
-			)
-			selected_card_id = payment_method_id
+				# --- STEP 5: Validation succeeded → Now attach card ---
+				payment_method_id = setup_intent.payment_method
+				stripe.PaymentMethod.attach(
+					payment_method_id,
+					customer=customer.id,
+				)
+				stripe.Customer.modify(
+					customer.id,
+					invoice_settings={"default_payment_method": payment_method_id}
+				)
+				selected_card_id = payment_method_id
 
-		tz = pytz.timezone("America/Los_Angeles")
-		start_date = datetime(2025, 11, 8, 0, 0, 0, tzinfo=tz)
+			tz = pytz.timezone("America/Los_Angeles")
+			start_date = datetime(2025, 11, 8, 0, 0, 0, tzinfo=tz)
 
-		# Get the current UTC time
-		now = datetime.now(tz)
+			# Get the current UTC time
+			now = datetime.now(tz)
 
-		# If today is before or on 8 Nov 2025 → delay start
-		if now <= start_date:
-			subscription = stripe.Subscription.create(
-				customer=customer,
-				discounts=discount_items,
-				items=items,
-				add_invoice_items=item_one_time,
-				billing_mode={"type": "flexible"},
-				off_session=True,
-				payment_behavior="error_if_incomplete",
-				proration_behavior="none",
-				billing_cycle_anchor="1762588800"  # schedule start on 8 Nov
-			)
-		else:
-			# Start immediately
-			subscription = stripe.Subscription.create(
-				customer=customer,
-				discounts=discount_items,
-				items=items,
-				add_invoice_items=item_one_time,
-				billing_mode={"type": "flexible"},
-				off_session=True,
-				payment_behavior="error_if_incomplete",
-				proration_behavior="none"
-			)
+			# If today is before or on 8 Nov 2025 → delay start
+			if now <= start_date:
+				subscription = stripe.Subscription.create(
+					customer=customer,
+					discounts=discount_items,
+					items=items,
+					add_invoice_items=item_one_time,
+					billing_mode={"type": "flexible"},
+					off_session=True,
+					payment_behavior="error_if_incomplete",
+					proration_behavior="none",
+					billing_cycle_anchor="1762588800"  # schedule start on 8 Nov
+				)
+			else:
+				# Start immediately
+				subscription = stripe.Subscription.create(
+					customer=customer,
+					discounts=discount_items,
+					items=items,
+					add_invoice_items=item_one_time,
+					billing_mode={"type": "flexible"},
+					off_session=True,
+					payment_behavior="error_if_incomplete",
+					proration_behavior="none"
+				)
 
-		if subscription.status == "active":
-			stripe_settings.integration_request.db_set("status", "Completed", update_modified=False)
-			stripe_settings.flags.status_changed_to = "Completed"
+			if subscription.status == "active":
+				stripe_settings.integration_request.db_set("status", "Completed", update_modified=False)
+				stripe_settings.flags.status_changed_to = "Completed"
 
+			else:
+				stripe_settings.integration_request.db_set("status", "Failed", update_modified=False)
+				frappe.log_error(f"Stripe Subscription ID {subscription.id}: Payment failed")
 		else:
 			stripe_settings.integration_request.db_set("status", "Failed", update_modified=False)
-			frappe.log_error(f"Stripe Subscription ID {subscription.id}: Payment failed")
+			frappe.log_error(f"Stripe Subscription ID {subscription.id}: Payment Link Expired")
+			frappe.throw("Payment Link Expired")
 	except Exception:
 		stripe_settings.integration_request.db_set("status", "Failed", update_modified=False)
 		stripe_settings.log_error("Unable to create Stripe subscription")
