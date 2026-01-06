@@ -223,6 +223,8 @@ class StripeSettings(Document):
 			bookings = None
 			if self.data.description.startswith("Payment Request for "):
 				sales_invoice_id = self.data.description.replace("Payment Request for ", "")
+				frappe.log_error("description",self.data.description)
+				frappe.log_error("sales_invoice_id",sales_invoice_id)
 				bookings = frappe.get_all(
 					"Booking",
 					filters={"sales_invoice_id": sales_invoice_id},
