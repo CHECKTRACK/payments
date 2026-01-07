@@ -220,21 +220,17 @@ class StripeSettings(Document):
 		import stripe
 
 		try:
-			bookings = None
+			booking = None
 			if self.data.description.startswith("Payment Request for "):
 				sales_invoice_id = self.data.description.replace("Payment Request for ", "")
 				frappe.log_error("description",self.data.description)
 				frappe.log_error("sales_invoice_id",sales_invoice_id)
-				bookings = frappe.get_all(
-					"Booking",
-					filters={"sales_invoice_id": sales_invoice_id},
-					limit=1
-				)
-			if len(bookings) > 0:
-				pr = frappe.get_doc("Payment Request", bookings[0].payment_request_id)
+				booking = frappe.db.get_value("Booking", {"sales_invoice_id":sales_invoice_id},"name")
+				
+			if booking:
+				booking_doc = frappe.get_doc("Booking", booking)
+				pr = frappe.get_doc("Payment Request", booking_doc.payment_request_id)
 				if pr.status not in ["Paid", "Cancelled"]:
-					booking_id = bookings[0].name
-					booking_doc = frappe.get_doc("Booking", booking_id)
 
 					booking_start = get_datetime(booking_doc.from_datetime)
 					utc_now = datetime.now(pytz.utc)
