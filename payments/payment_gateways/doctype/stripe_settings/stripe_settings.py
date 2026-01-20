@@ -252,8 +252,21 @@ class StripeSettings(Document):
 							card={"token": self.data.stripe_token_id}
 						)
 
+						payer_email = self.data.payer_email
+						customer_list = frappe.get_all("Customer", filters={"email_id": payer_email}, limit=1)
+						payer_name = customer_list[0].name
+						existing_customers = stripe.Customer.list(email=payer_email, limit=1)
+						if existing_customers.data:
+							customer = existing_customers.data[0]
+						else:
+							customer = stripe.Customer.create(
+								name=payer_name,
+								email=payer_email
+							)
+
 						intent = stripe.PaymentIntent.create(
 							amount=cint(flt(self.data.amount) * 100),
+							customer=customer.id,
 							currency=self.data.currency,
 							payment_method=payment_method.id,
 							receipt_email=self.data.payer_email,
@@ -302,12 +315,24 @@ class StripeSettings(Document):
 						else:
 							frappe.log_error(charge.failure_message, "Stripe Payment not completed")
 					else:
+						payer_email = self.data.payer_email
+						customer_list = frappe.get_all("Customer", filters={"email_id": payer_email}, limit=1)
+						payer_name = customer_list[0].name
+						existing_customers = stripe.Customer.list(email=payer_email, limit=1)
+						if existing_customers.data:
+							customer = existing_customers.data[0]
+						else:
+							customer = stripe.Customer.create(
+								name=payer_name,
+								email=payer_email
+							)
 						charge = stripe.Charge.create(
 							amount=cint(flt(self.data.amount) * 100),
 							currency=self.data.currency,
 							source=self.data.stripe_token_id,
 							description=self.data.description,
 							receipt_email=self.data.payer_email,
+							customer=customer.id
 						)
 
 						if charge.captured == True:
@@ -324,12 +349,24 @@ class StripeSettings(Document):
 					self.flags.status_changed_to = "Failed"
 					frappe.log_error("Payment Link Expired", f"Payment Link Expired {pr.name}")
 			else:
+				payer_email = self.data.payer_email
+				customer_list = frappe.get_all("Customer", filters={"email_id": payer_email}, limit=1)
+				payer_name = customer_list[0].name
+				existing_customers = stripe.Customer.list(email=payer_email, limit=1)
+				if existing_customers.data:
+					customer = existing_customers.data[0]
+				else:
+					customer = stripe.Customer.create(
+						name=payer_name,
+						email=payer_email
+					)
 				charge = stripe.Charge.create(
 					amount=cint(flt(self.data.amount) * 100),
 					currency=self.data.currency,
 					source=self.data.stripe_token_id,
 					description=self.data.description,
 					receipt_email=self.data.payer_email,
+					customer=customer.id
 				)
 
 				if charge.captured == True:
