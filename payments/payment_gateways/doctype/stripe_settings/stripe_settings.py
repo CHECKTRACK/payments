@@ -266,7 +266,9 @@ class StripeSettings(Document):
 
 						intent = stripe.PaymentIntent.create(
 							amount=cint(flt(self.data.amount) * 100),
-							customer=customer.id,
+							metadata={
+								"customer_id": customer.id
+							},
 							currency=self.data.currency,
 							payment_method=payment_method.id,
 							receipt_email=self.data.payer_email,
@@ -332,7 +334,9 @@ class StripeSettings(Document):
 							source=self.data.stripe_token_id,
 							description=self.data.description,
 							receipt_email=self.data.payer_email,
-							customer=customer.id
+							metadata={
+								"customer_id": customer.id
+							}
 						)
 
 						if charge.captured == True:
@@ -366,7 +370,9 @@ class StripeSettings(Document):
 					source=self.data.stripe_token_id,
 					description=self.data.description,
 					receipt_email=self.data.payer_email,
-					customer=customer.id
+					metadata={
+						"customer_id": customer.id
+					}
 				)
 
 				if charge.captured == True:
