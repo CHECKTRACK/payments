@@ -152,7 +152,10 @@ def create_subscription_on_stripe(stripe_settings):
 					off_session=True,
 					payment_behavior="error_if_incomplete",
 					proration_behavior="none",
-					billing_cycle_anchor="1762588800"  # schedule start on 8 Nov
+					billing_cycle_anchor="1762588800",  # schedule start on 8 Nov
+					metadata={
+						"customer_id": customer.id
+					}
 				)
 			else:
 				# Start immediately
@@ -164,7 +167,10 @@ def create_subscription_on_stripe(stripe_settings):
 					billing_mode={"type": "flexible"},
 					off_session=True,
 					payment_behavior="error_if_incomplete",
-					proration_behavior="none"
+					proration_behavior="none",
+					metadata={
+						"customer_id": customer.id
+					}
 				)
 
 			if subscription.status == "active":
