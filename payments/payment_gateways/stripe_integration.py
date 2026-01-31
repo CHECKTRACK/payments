@@ -59,7 +59,7 @@ def create_subscription_on_stripe(stripe_settings):
 	subscription_data = frappe.get_doc("Subscription", sales_invoice_doc.subscription)
 	for payment_plan in stripe_settings.payment_plans:
 		plan = frappe.db.get_value("Subscription Plan",payment_plan.plan,["product_price_id", "custom_product_coupons_id"],as_dict=True)
-		if plan.custom_product_coupons_id:
+		if plan.custom_product_coupons_id and subscription_data.custom_coupon_code:
 			discount_items.append({"coupon": plan.custom_product_coupons_id})
 
 		price_obj = stripe.Price.retrieve(plan.product_price_id)
