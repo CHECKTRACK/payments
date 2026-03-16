@@ -183,7 +183,7 @@ def create_subscription_on_stripe(stripe_settings):
 				frappe.log_error(f"Stripe Subscription ID {subscription.id}: Payment failed")
 		else:
 			stripe_settings.integration_request.db_set("status", "Failed", update_modified=False)
-			frappe.log_error(f"Stripe Subscription ID {subscription.id}: Payment Link Expired")
+			frappe.log_error(f"Stripe Subscription ID {subscription_data.id}: Payment Link Expired")
 			frappe.throw("Payment Link Expired")
 	except Exception:
 		stripe_settings.integration_request.db_set("status", "Failed", update_modified=False)
