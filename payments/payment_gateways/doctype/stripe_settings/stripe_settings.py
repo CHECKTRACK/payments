@@ -223,9 +223,8 @@ class StripeSettings(Document):
 			booking = None
 			if self.data.description.startswith("Payment Request for "):
 				sales_invoice_id = self.data.description.replace("Payment Request for ", "")
-				frappe.log_error("description",self.data.description)
-				frappe.log_error("sales_invoice_id",sales_invoice_id)
 				booking = frappe.db.get_value("Booking", {"sales_invoice_id":sales_invoice_id},"name")
+				as_booking = frappe.db.get_value("AS-Booking", {"sales_invoice_id":sales_invoice_id},"name")
 				
 			if booking:
 				booking_doc = frappe.get_doc("Booking", booking)
@@ -352,6 +351,42 @@ class StripeSettings(Document):
 					self.integration_request.db_set("status", "Failed", update_modified=False)
 					self.flags.status_changed_to = "Failed"
 					frappe.log_error("Payment Link Expired", f"Payment Link Expired {pr.name}")
+			
+			elif as_booking:
+				booking_doc = frappe.get_doc("AS-Booking", as_booking)
+				pr = frappe.get_doc("Payment Request", booking_doc.payment_request_id)
+				if pr.status not in ["Paid", "Cancelled"]:
+					payer_email = self.data.payer_email
+					customer_list = frappe.get_all("Customer", filters={"email_id": payer_email}, limit=1)
+					payer_name = customer_list[0].name
+					existing_customers = stripe.Customer.list(email=payer_email, limit=1)
+					if existing_customers.data:
+						customer = existing_customers.data[0]
+					else:
+						customer = stripe.Customer.create(
+							name=payer_name,
+							email=payer_email
+						)
+					charge = stripe.Charge.create(
+						amount=cint(flt(self.data.amount) * 100),
+						currency=self.data.currency,
+						source=self.data.stripe_token_id,
+						description=self.data.description,
+						receipt_email=self.data.payer_email,
+						metadata={
+							"customer_id": customer.id
+						}
+					)
+
+					if charge.captured == True:
+						self.integration_request.db_set("status", "Completed", update_modified=False)
+						self.flags.status_changed_to = "Completed"
+					else:
+						frappe.log_error(charge.failure_message, "Stripe Payment not completed")
+				else:
+					self.integration_request.db_set("status", "Failed", update_modified=False)
+					self.flags.status_changed_to = "Failed"
+					frappe.log_error("Payment Link Expired", f"Payment Link Expired {pr.name}")	
 			else:
 				payer_email = self.data.payer_email
 				customer_list = frappe.get_all("Customer", filters={"email_id": payer_email}, limit=1)
