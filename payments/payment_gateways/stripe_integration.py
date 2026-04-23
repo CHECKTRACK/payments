@@ -62,7 +62,8 @@ def create_subscription_on_stripe(stripe_settings):
 		if plan.custom_product_coupons_id and subscription_data.custom_coupon_code:
 			if subscription_data.custom_coupon_code == "SPRINGDEAL":
 				discount_items.append({"coupon": plan.custom_product_coupons_id})
-
+		elif plan.custom_product_coupons_id and (sales_invoice_doc.apply_discount_on == "Grand Total" and sales_invoice_doc.discount_amount > 0):
+			discount_items.append({"coupon": plan.custom_product_coupons_id})
 		price_obj = stripe.Price.retrieve(plan.product_price_id)
 		if price_obj["type"] == "recurring":
 			items.append({"price": plan.product_price_id, "quantity": payment_plan.qty if payment_plan.qty > 0 else 1})
