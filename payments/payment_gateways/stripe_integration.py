@@ -50,6 +50,17 @@ def create_stripe_subscription(gateway_controller, data):
 		}
 
 
+def _safe_detach_payment_method(payment_method_id):
+	"""Best-effort detach for a card Stripe may have already auto-attached to the customer
+	as a side effect of confirming a SetupIntent, even though we're about to reject it.
+	Swallows errors since the card may genuinely not be attached (e.g. the SetupIntent
+	itself never reached "succeeded") - this is cleanup insurance, not the primary control."""
+	try:
+		stripe.PaymentMethod.detach(payment_method_id)
+	except Exception:
+		frappe.log_error("Detach Rejected Card", frappe.get_traceback())
+
+
 def create_subscription_on_stripe(stripe_settings):
 	items = []
 	item_one_time = []
@@ -101,8 +112,15 @@ def create_subscription_on_stripe(stripe_settings):
 					matched_pm = pm
 					break
 
-			if matched_pm:
-				# Card already exists → set as default
+			# A fingerprint match only proves it's the same card *number* - Stripe never
+			# persists raw CVC, only the check *result* from whenever this PaymentMethod was
+			# first validated. If that result was "fail", reusing it blindly would trap a
+			# customer who's retrying with a corrected CVC forever (the new token they just
+			# submitted, which may carry the corrected CVC, would be silently discarded in
+			# favor of the old, already-known-bad PaymentMethod object). Fall through to a
+			# fresh SetupIntent in that case instead of short-circuiting here.
+			if matched_pm and matched_pm.card.checks.cvc_check != "fail":
+				# Card already exists and previously passed validation → set as default
 				stripe.Customer.modify(
 					customer.id,
 					invoice_settings={"default_payment_method": matched_pm.id}
@@ -123,6 +141,23 @@ def create_subscription_on_stripe(stripe_settings):
 				)
 
 				if setup_intent.status != "succeeded":
+					_safe_detach_payment_method(setup_intent.payment_method)
+					frappe.throw(_("Card validation failed. Please use another card."))
+
+				# setup_intent.status == "succeeded" only proves the card authorized - it does
+				# NOT prove the CVC matched. Some issuers/networks treat CVC as advisory and
+				# still authorize on a mismatch, recording the real result in
+				# card.checks.cvc_check instead - the stricter check only runs on a real
+				# charge, which for a subscription means the *first invoice*, well after
+				# this card has already been attached as the customer's default payment
+				# method. Confirming a SetupIntent with a customer attached also auto-attaches
+				# the PaymentMethod as a side effect of a *successful* confirmation,
+				# independently of the explicit attach below - so a CVC failure caught here
+				# must still be explicitly detached, or a "rejected" card ends up silently
+				# saved as the customer's default anyway.
+				pm_after = stripe.PaymentMethod.retrieve(setup_intent.payment_method)
+				if pm_after.card.checks.cvc_check == "fail":
+					_safe_detach_payment_method(setup_intent.payment_method)
 					frappe.throw(_("Card validation failed. Please use another card."))
 
 				# --- STEP 5: Validation succeeded → Now attach card ---
