@@ -23,6 +23,15 @@ def create_stripe_subscription(gateway_controller, data):
 		# Fetch Subscription Plans from Subscription Doctype instead of Payment Plan
 		payment_request_doc = frappe.get_doc("Payment Request", stripe_settings.data.reference_docname)
 
+		# Reject a stale/expired payment link before creating any real Stripe Subscription
+		# - unlike the one-time-charge path (create_charge_on_stripe), this had no
+		# expiration check at all. sns_fca cancels the Payment Request (status ->
+		# "Cancelled") ~10 minutes after a membership signup/onsite-sell payment link is
+		# created if it hasn't been paid yet.
+		if payment_request_doc.status in ("Paid", "Cancelled"):
+			frappe.log_error("Payment Link Expired", f"Payment Link Expired {payment_request_doc.name}")
+			return stripe_settings.finalize_request()
+
 		if payment_request_doc.is_a_subscription:
 			# Pull all subscription plan details for this request
 			stripe_settings.payment_plans = frappe.get_all(
@@ -70,10 +79,15 @@ def create_subscription_on_stripe(stripe_settings):
 	subscription_data = frappe.get_doc("Subscription", sales_invoice_doc.subscription)
 	for payment_plan in stripe_settings.payment_plans:
 		plan = frappe.db.get_value("Subscription Plan",payment_plan.plan,["product_price_id", "custom_product_coupons_id"],as_dict=True)
-		if plan.custom_product_coupons_id and subscription_data.custom_coupon_code:
-			if subscription_data.custom_coupon_code == "SPRINGDEAL":
-				discount_items.append({"coupon": plan.custom_product_coupons_id})
-		elif plan.custom_product_coupons_id and (sales_invoice_doc.apply_discount_on == "Grand Total" and sales_invoice_doc.discount_amount > 0):
+		# custom_product_coupons_id is a manually pre-created Stripe Coupon attached at
+		# real-Subscription-creation time when a membership coupon code was actually used
+		# (custom_membership_coupon_code, a Link to SS-Membership Coupon - not
+		# custom_coupon_code, which is a Link to the older, unrelated Coupon Code doctype
+		# and would fail Link validation if it ever held one of these codes) and the
+		# resulting invoice already carries a Grand Total discount.
+		if plan.custom_product_coupons_id and subscription_data.custom_membership_coupon_code and (
+			sales_invoice_doc.apply_discount_on == "Grand Total" and sales_invoice_doc.discount_amount > 0
+		):
 			discount_items.append({"coupon": plan.custom_product_coupons_id})
 		price_obj = stripe.Price.retrieve(plan.product_price_id)
 		if price_obj["type"] == "recurring":

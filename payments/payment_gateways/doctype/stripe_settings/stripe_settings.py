@@ -220,6 +220,20 @@ class StripeSettings(Document):
 		import stripe
 
 		try:
+			# Reject a stale/expired payment link before creating any real Stripe charge.
+			# self.data.reference_doctype/reference_docname are always "Payment Request"/
+			# <name> (stripe_checkout.py's page context always includes both, sent back
+			# verbatim by stripe_checkout.js) - the Booking/AS-Booking branches below
+			# already re-check this themselves, but the generic (package/one-time) branch
+			# had no such check at all, so a payment link past its expiration window
+			# (sns_fca cancels the Payment Request ~10 minutes after creation) could still
+			# charge a card with nothing on the Frappe side to show for it.
+			if self.data.get("reference_doctype") == "Payment Request" and self.data.get("reference_docname"):
+				pr_status = frappe.db.get_value("Payment Request", self.data.reference_docname, "status")
+				if pr_status in ("Paid", "Cancelled"):
+					frappe.log_error("Payment Link Expired", f"Payment Link Expired {self.data.reference_docname}")
+					return self.finalize_request()
+
 			booking = None
 			if self.data.description.startswith("Payment Request for "):
 				sales_invoice_id = self.data.description.replace("Payment Request for ", "")
