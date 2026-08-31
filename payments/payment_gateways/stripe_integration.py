@@ -77,23 +77,35 @@ def create_subscription_on_stripe(stripe_settings):
 	payment_request_doc = frappe.get_doc("Payment Request", stripe_settings.data.reference_docname)
 	sales_invoice_doc = frappe.get_doc("Sales Invoice", payment_request_doc.reference_name)
 	subscription_data = frappe.get_doc("Subscription", sales_invoice_doc.subscription)
+
+	if subscription_data.custom_membership_coupon_code:
+		membership_coupon = frappe.db.get_value(
+			"SS-Membership Coupon",
+			subscription_data.custom_membership_coupon_code,
+			[
+				"monthly_discount_type", "stripe_monthly_coupon_id",
+				"admin_fee_treatment", "stripe_admin_fee_coupon_id",
+				"annual_fee_treatment", "stripe_annual_fee_coupon_id",
+			],
+			as_dict=True,
+		)
+		if membership_coupon:
+			if membership_coupon.monthly_discount_type not in (None, "None") and membership_coupon.stripe_monthly_coupon_id:
+				discount_items.append({"coupon": membership_coupon.stripe_monthly_coupon_id})
+			if membership_coupon.admin_fee_treatment not in (None, "None") and membership_coupon.stripe_admin_fee_coupon_id:
+				discount_items.append({"coupon": membership_coupon.stripe_admin_fee_coupon_id})
+			if membership_coupon.annual_fee_treatment not in (None, "None") and membership_coupon.stripe_annual_fee_coupon_id:
+				discount_items.append({"coupon": membership_coupon.stripe_annual_fee_coupon_id})
+
 	for payment_plan in stripe_settings.payment_plans:
-		plan = frappe.db.get_value("Subscription Plan",payment_plan.plan,["product_price_id", "custom_product_coupons_id"],as_dict=True)
-		# custom_product_coupons_id is a manually pre-created Stripe Coupon attached at
-		# real-Subscription-creation time when a membership coupon code was actually used
-		# (custom_membership_coupon_code, a Link to SS-Membership Coupon - not
-		# custom_coupon_code, which is a Link to the older, unrelated Coupon Code doctype
-		# and would fail Link validation if it ever held one of these codes) and the
-		# resulting invoice already carries a Grand Total discount.
-		if plan.custom_product_coupons_id and subscription_data.custom_membership_coupon_code and (
-			sales_invoice_doc.apply_discount_on == "Grand Total" and sales_invoice_doc.discount_amount > 0
-		):
-			discount_items.append({"coupon": plan.custom_product_coupons_id})
-		price_obj = stripe.Price.retrieve(plan.product_price_id)
+		price_id = frappe.db.get_value("Subscription Plan", payment_plan.plan, "product_price_id")
+		item = {"price": price_id, "quantity": payment_plan.qty if payment_plan.qty > 0 else 1}
+
+		price_obj = stripe.Price.retrieve(price_id)
 		if price_obj["type"] == "recurring":
-			items.append({"price": plan.product_price_id, "quantity": payment_plan.qty if payment_plan.qty > 0 else 1})
+			items.append(item)
 		elif price_obj["type"] == "one_time":
-			item_one_time.append({"price": plan.product_price_id, "quantity": payment_plan.qty if payment_plan.qty > 0 else 1})
+			item_one_time.append(item)
 
 
 	try:
