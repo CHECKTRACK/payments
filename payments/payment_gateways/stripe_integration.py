@@ -8,6 +8,14 @@ import pytz
 from frappe import _
 from frappe.integrations.utils import create_request_log
 
+# sns_fca Member Referral Program - a real Stripe Coupon object, created manually in
+# the Stripe Dashboard (not programmatically - no coupon-creation infrastructure exists
+# in this app), $25 off, duration=once, restricted to the Admin Fee product. Referenced
+# by this fixed custom ID rather than a DB field since it's a single, permanent,
+# non-code-specific discount (unlike SS-Membership Coupon's per-code Stripe Coupon IDs
+# below, which vary by coupon and are looked up from that doctype instead).
+REFERRAL_ADMIN_FEE_COUPON_ID = "referral-admin-fee-25off"
+
 
 def create_stripe_subscription(gateway_controller, data):
 	stripe_settings = frappe.get_doc("Stripe Settings", gateway_controller)
@@ -96,6 +104,23 @@ def create_subscription_on_stripe(stripe_settings):
 				discount_items.append({"coupon": membership_coupon.stripe_admin_fee_coupon_id})
 			if membership_coupon.annual_fee_treatment not in (None, "None") and membership_coupon.stripe_annual_fee_coupon_id:
 				discount_items.append({"coupon": membership_coupon.stripe_annual_fee_coupon_id})
+
+	# sns_fca Member Referral Program - a new member's $25-off-Admin-Fee discount is
+	# computed and applied on the ERPNext Sales Invoice at signup, but that alone never
+	# reaches Stripe: Admin Fee is a one-time item (added via add_invoice_items below,
+	# never a recurring SubscriptionItem), and this function builds the real Stripe
+	# charge from each Subscription Plan's own live product_price_id, completely
+	# independent of whatever discount_amount the invoice shows. Without a matching
+	# real Stripe Coupon here, the card would be charged the full, undiscounted Admin
+	# Fee regardless of what ERPNext's books say. Mutually exclusive with the
+	# SS-Membership Coupon block above by construction, not by a check here - sns_fca's
+	# utils/referral_program.py::resolve_referral_discount() never creates a Pending
+	# SS Referral row at all when a real coupon was applied at the same signup.
+	referral_pending = frappe.db.exists(
+		"SS Referral", {"new_subscription": subscription_data.name, "status": "Pending"}
+	)
+	if referral_pending:
+		discount_items.append({"coupon": REFERRAL_ADMIN_FEE_COUPON_ID})
 
 	for payment_plan in stripe_settings.payment_plans:
 		price_id = frappe.db.get_value("Subscription Plan", payment_plan.plan, "product_price_id")
