@@ -8,7 +8,6 @@ import pytz
 from frappe import _
 from frappe.integrations.utils import create_request_log
 
-
 def create_stripe_subscription(gateway_controller, data):
 	stripe_settings = frappe.get_doc("Stripe Settings", gateway_controller)
 	stripe_settings.data = frappe._dict(data)
@@ -96,6 +95,30 @@ def create_subscription_on_stripe(stripe_settings):
 				discount_items.append({"coupon": membership_coupon.stripe_admin_fee_coupon_id})
 			if membership_coupon.annual_fee_treatment not in (None, "None") and membership_coupon.stripe_annual_fee_coupon_id:
 				discount_items.append({"coupon": membership_coupon.stripe_annual_fee_coupon_id})
+
+	# sns_fca Member Referral Program - a new member's $25-off-Admin-Fee discount is
+	# computed and applied on the ERPNext Sales Invoice at signup, but that alone never
+	# reaches Stripe: Admin Fee is a one-time item (added via add_invoice_items below,
+	# never a recurring SubscriptionItem), and this function builds the real Stripe
+	# charge from each Subscription Plan's own live product_price_id, completely
+	# independent of whatever discount_amount the invoice shows. Without a matching
+	# real Stripe Coupon here, the card would be charged the full, undiscounted Admin
+	# Fee regardless of what ERPNext's books say. Mutually exclusive with the
+	# SS-Membership Coupon block above by construction, not by a check here - sns_fca's
+	# utils/referral_program.py::resolve_referral_discount() never creates a Pending
+	# SS Referral row at all when a real coupon was applied at the same signup.
+	#
+	# The Stripe Coupon id itself is read from this specific referral's own row
+	# (stripe_coupon_id, stamped by record_referral_attempt() at signup time) rather
+	# than hardcoded here - same lookup-from-a-field pattern as the SS-Membership
+	# Coupon block above, so this app never needs to know the id's actual value.
+	referral_stripe_coupon_id = frappe.db.get_value(
+		"SS Referral",
+		{"new_subscription": subscription_data.name, "status": "Pending"},
+		"stripe_coupon_id",
+	)
+	if referral_stripe_coupon_id:
+		discount_items.append({"coupon": referral_stripe_coupon_id})
 
 	for payment_plan in stripe_settings.payment_plans:
 		price_id = frappe.db.get_value("Subscription Plan", payment_plan.plan, "product_price_id")
