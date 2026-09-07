@@ -8,15 +8,6 @@ import pytz
 from frappe import _
 from frappe.integrations.utils import create_request_log
 
-# sns_fca Member Referral Program - a real Stripe Coupon object, created manually in
-# the Stripe Dashboard (not programmatically - no coupon-creation infrastructure exists
-# in this app), $25 off, duration=once, restricted to the Admin Fee product. Referenced
-# by this fixed custom ID rather than a DB field since it's a single, permanent,
-# non-code-specific discount (unlike SS-Membership Coupon's per-code Stripe Coupon IDs
-# below, which vary by coupon and are looked up from that doctype instead).
-REFERRAL_ADMIN_FEE_COUPON_ID = "referral-admin-fee-25off"
-
-
 def create_stripe_subscription(gateway_controller, data):
 	stripe_settings = frappe.get_doc("Stripe Settings", gateway_controller)
 	stripe_settings.data = frappe._dict(data)
@@ -116,11 +107,18 @@ def create_subscription_on_stripe(stripe_settings):
 	# SS-Membership Coupon block above by construction, not by a check here - sns_fca's
 	# utils/referral_program.py::resolve_referral_discount() never creates a Pending
 	# SS Referral row at all when a real coupon was applied at the same signup.
-	referral_pending = frappe.db.exists(
-		"SS Referral", {"new_subscription": subscription_data.name, "status": "Pending"}
+	#
+	# The Stripe Coupon id itself is read from this specific referral's own row
+	# (stripe_coupon_id, stamped by record_referral_attempt() at signup time) rather
+	# than hardcoded here - same lookup-from-a-field pattern as the SS-Membership
+	# Coupon block above, so this app never needs to know the id's actual value.
+	referral_stripe_coupon_id = frappe.db.get_value(
+		"SS Referral",
+		{"new_subscription": subscription_data.name, "status": "Pending"},
+		"stripe_coupon_id",
 	)
-	if referral_pending:
-		discount_items.append({"coupon": REFERRAL_ADMIN_FEE_COUPON_ID})
+	if referral_stripe_coupon_id:
+		discount_items.append({"coupon": referral_stripe_coupon_id})
 
 	for payment_plan in stripe_settings.payment_plans:
 		price_id = frappe.db.get_value("Subscription Plan", payment_plan.plan, "product_price_id")
